@@ -152,7 +152,11 @@ vim.opt.inccommand = 'split'
 vim.opt.cursorline = true
 
 -- Minimal number of screen lines to keep above and below the cursor.
-vim.opt.scrolloff = 5
+vim.opt.scrolloff = 8
+
+-- Removing swap file and backup file
+vim.opt.swapfile = false
+vim.opt.backup = false
 
 -- [[ Basic Keymaps ]]
 --  See `:help vim.keymap.set()`
