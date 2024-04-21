@@ -152,7 +152,7 @@ vim.opt.inccommand = 'split'
 vim.opt.cursorline = true
 
 -- Minimal number of screen lines to keep above and below the cursor.
-vim.opt.scrolloff = 10
+vim.opt.scrolloff = 5
 
 -- [[ Basic Keymaps ]]
 --  See `:help vim.keymap.set()`
@@ -287,11 +287,12 @@ require('lazy').setup({
         ['<leader>s'] = { name = '[S]earch', _ = 'which_key_ignore' },
         ['<leader>w'] = { name = '[W]orkspace', _ = 'which_key_ignore' },
         ['<leader>t'] = { name = '[T]oggle', _ = 'which_key_ignore' },
-        ['<leader>h'] = { name = 'Git [H]unk', _ = 'which_key_ignore' },
+        ['<leader>H'] = { name = 'Git [H]unk', _ = 'which_key_ignore' },
+        ['<leader>h'] = { name = '[H]arpoon', _ = 'which_key_ignore' },
       }
       -- visual mode
       require('which-key').register({
-        ['<leader>h'] = { 'Git [H]unk' },
+        ['<leader>H'] = { 'Git [H]unk' },
       }, { mode = 'v' })
     end,
   },
@@ -721,9 +722,9 @@ require('lazy').setup({
         -- No, but seriously. Please read `:help ins-completion`, it is really good!
         mapping = cmp.mapping.preset.insert {
           -- Select the [n]ext item
-          -- ['<C-n>'] = cmp.mapping.select_next_item(),
+          ['<C-n>'] = cmp.mapping.select_next_item(),
           -- Select the [p]revious item
-          -- ['<C-p>'] = cmp.mapping.select_prev_item(),
+          ['<C-p>'] = cmp.mapping.select_prev_item(),
 
           -- Scroll the documentation window [b]ack / [f]orward
           ['<C-b>'] = cmp.mapping.scroll_docs(-4),
@@ -904,28 +905,6 @@ require('lazy').setup({
     },
   },
 })
-
--- Function to shorten up displayed url
-
---[[ -- Custom function to get shortened path
-function ShortenPath(path, levels)
-  local sep = package.config:sub(1, 1)
-  local parts = {}
-  for part in string.gmatch(path, '[^' .. sep .. ']+') do
-    table.insert(parts, part)
-  end
-  if #parts <= levels then
-    return path
-  end
-  local short_path = ''
-  for i = #parts - levels + 1, #parts do
-    short_path = short_path .. sep .. parts[i]
-  end
-  return '...' .. short_path
-end
-vim.opt.statusline = '%{v:lua.ShortenPath(expand("%:p"), 4)}'
-
-]]
 
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et

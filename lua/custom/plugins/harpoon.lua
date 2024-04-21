@@ -8,14 +8,6 @@ return {
   config = function()
     local harpoon = require 'harpoon'
 
-    -- vim.api.nvim_create_autocmd('LspAttach', {
-    -- group = vim.api.nvim_create_augroup('harpoon-lsp-attach', { clear = true }),
-    -- callback = function(event) {
-    -- maybe use this idk
-
-    -- }
-
-    -- }
     -- telescope + harpoon config
     local conf = require('telescope.config').values
 
@@ -37,50 +29,68 @@ return {
         :find()
     end
 
-    -- local map = function(keys, func, desc)
-    --  vim.keymap.set('n', keys, func, { buffer = event.buf, desc = 'LSP: ' .. desc })
-    -- end
-
     -- REQUIRED
     harpoon:setup()
     -- REQUIRED
 
-    -- map 'n'
-
-    vim.keymap.set('n', '<leader>a', function()
-      harpoon:list():add()
-    end)
-
-    -- vim.keymap.set('n', '<leader>')
-
-    vim.keymap.set('n', '<C-h>', function()
-      harpoon:list():select(1)
-    end)
-    vim.keymap.set('n', '<C-t>', function()
-      harpoon:list():select(2)
-    end)
-    vim.keymap.set('n', '<C-n>', function()
-      harpoon:list():select(3)
-    end)
-    vim.keymap.set('n', '<C-s>', function()
-      harpoon:list():select(4)
-    end)
-
-    vim.keymap.set('n', '<leader><C-h>', function()
-      harpoon:list():replace_at(1)
-    end)
-    vim.keymap.set('n', '<leader><C-t>', function()
-      harpoon:list():replace_at(2)
-    end)
-    vim.keymap.set('n', '<leader><C-n>', function()
-      harpoon:list():replace_at(3)
-    end)
-    vim.keymap.set('n', '<leader><C-s>', function()
-      harpoon:list():replace_at(4)
-    end)
-
+    -- Toggle harpoon window
     vim.keymap.set('n', '<C-e>', function()
       toggle_telescope(harpoon:list())
     end, { desc = 'Open harpoon window' })
+
+    -- Add file
+    vim.keymap.set('n', '<leader>a', function()
+      harpoon:list():add()
+    end, { desc = 'Harp: Add file' })
+
+    -- Select file
+    vim.keymap.set('n', '<leader>h1', function()
+      harpoon:list():select(1)
+    end, { desc = 'Harp: Select file 1' })
+    vim.keymap.set('n', '<leader>h2', function()
+      harpoon:list():select(2)
+    end, { desc = 'Harp: Select file 2' })
+    vim.keymap.set('n', '<leader>h3', function()
+      harpoon:list():select(3)
+    end, { desc = 'Harp: Select file 3' })
+    vim.keymap.set('n', '<leader>h4', function()
+      harpoon:list():select(4)
+    end, { desc = 'Harp: Select file 4' })
+
+    -- Replace file
+    vim.keymap.set('n', '<leader><C-1>', function()
+      harpoon:list():replace_at(1)
+    end, { desc = 'Harp: Replace file 1' })
+    vim.keymap.set('n', '<leader><C-2>', function()
+      harpoon:list():replace_at(2)
+    end, { desc = 'Harp: Replace file 2' })
+    vim.keymap.set('n', '<leader><C-3>', function()
+      harpoon:list():replace_at(3)
+    end, { desc = 'Harp: Replace file 3' })
+    vim.keymap.set('n', '<leader><C-4>', function()
+      harpoon:list():replace_at(4)
+    end, { desc = 'Harp: Replace file 4' })
+
+    -- Close file
+    vim.keymap.set('n', '<leader>hd1', function()
+      harpoon:list():remove_at(1)
+    end, { desc = 'Harp: Close file 1' })
+
+    vim.keymap.set('n', '<leader>hd2', function()
+      harpoon:list():remove_at(2)
+    end, { desc = 'Harp: Close file 2' })
+
+    vim.keymap.set('n', '<leader>hd3', function()
+      harpoon:list():remove_at(3)
+    end, { desc = 'Harp: Close file 3' })
+
+    vim.keymap.set('n', '<leader>hd4', function()
+      harpoon:list():remove_at(4)
+    end, { desc = 'Harp: Close file 4' })
+
+    -- Close all files
+    vim.keymap.set('n', '<leader>hdd', function()
+      harpoon:list():clear()
+    end, { desc = 'Harp: Close all files' })
   end,
 }
