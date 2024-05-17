@@ -67,6 +67,10 @@ vim.opt.cursorline = true
 -- Minimal number of screen lines to keep above and below the cursor.
 vim.opt.scrolloff = 8
 
+-- Limit completions to 8 items at a time
+-- vim.opt.pumheight = 12
+-- vim.opt.pumwidth = 24
+
 -- Removing swap file and backup file
 vim.opt.swapfile = false
 vim.opt.backup = false
@@ -220,6 +224,7 @@ require('lazy').setup({
         ['<leader>t'] = { name = '[T]oggle', _ = 'which_key_ignore' },
         ['<leader>gh'] = { name = '[G]it [H]unk', _ = 'which_key_ignore' },
         ['<leader>h'] = { name = '[H]arpoon', _ = 'which_key_ignore' },
+        ['<leader>a'] = { name = '[A]I', _ = 'which_key_ignore' },
       }
       -- visual mode
       require('which-key').register({
@@ -409,10 +414,7 @@ require('lazy').setup({
 
           local builtin = require 'telescope.builtin'
 
-          map('gd', function()
-            local lsp_def = builtin.lsp_definitions { jump_type = 'vsplit' }
-            return lsp_def
-          end, '[G]oto [D]efinition')
+          map('gd', builtin.lsp_definitions, '[G]oto [D]efinition')
 
           -- Find references for the word under your cursor.
           map('gr', builtin.lsp_references, '[G]oto [R]eferences')
@@ -512,6 +514,12 @@ require('lazy').setup({
         -- },
         --
 
+        clangd = {
+          capabilities = {
+            offsetencoding = { 'utf-16' },
+          },
+        },
+
         lua_ls = {
           -- cmd = {...},
           -- filetypes = { ...},
@@ -536,6 +544,55 @@ require('lazy').setup({
       --  You can press `g?` for help in this menu.
       require('mason').setup()
 
+      -- Adding in configuration for Godot + GDScript
+      -- local port = 6005
+      -- local cmd = vim.lsp.rpc.connect('127.0.0.1', port)
+      -- local pipe = '/godot/config/godot.pipe'
+      --
+      -- vim.lsp.start {
+      --   name = 'Godot',
+      --   cmd = cmd,
+      --   root_dir = vim.fs.dirname(vim.fs.find({ 'project.godot', '.git' }, { upward = true })[1]),
+      --   on_attach = function(client, bufnr)
+      --     vim.api.nvim_command('echo serverstart("' .. pipe .. '")')
+      --   end,
+      -- }
+
+      --------
+      -- Godot External Config for the below setup
+      -- Exec Path: run `which nvim` to get the path to your nvim binary
+      -- Exec Flags: --server /godot/config/godot.pipe --remote-send "<esc>:n {file}<CR>:call cursor({line},{col})<CR>"
+
+      -- local function for_godot()
+      --   local args = vim.fn.argv()
+      --
+      --   ---@diagnostic disable-next-line: redefined-local
+      --   for _, args in ipairs(args) do
+      --     print(args)
+      --     if args == '-gt' then
+      --       return true
+      --     end
+      --   end
+      --   return false
+      -- end
+      --
+      -- if for_godot() then
+      --   local port = 6005
+      --   local cmd = vim.lsp.rpc.connect('127.0.0.1', port)
+      --   local pipe = '/godot/config/godot.pipe'
+      --   vim.lsp.start {
+      --     force_setup = true,
+      --     single_file_support = true,
+      --     name = 'Godot',
+      --     cmd = cmd,
+      --     root_dir = vim.fs.dirname(vim.fs.find({ 'project.godot', '.git' }, { upward = true })[1]),
+      --     ---@diagnostic disable-next-line: unused-local
+      --     on_attach = function(client, bufnr)
+      --       vim.api.nvim_command('echo serverstart("' .. pipe .. '")')
+      --     end,
+      --   }
+      -- end
+
       -- You can add other tools here that you want Mason to install
       -- for you, so that they are available from within Neovim.
       local ensure_installed = vim.tbl_keys(servers or {})
@@ -544,14 +601,48 @@ require('lazy').setup({
       })
       require('mason-tool-installer').setup { ensure_installed = ensure_installed }
 
+      -- Setup LSP servers
+      local lspconfig = require 'lspconfig'
+      lspconfig.gdscript.setup {}
+
+      local pipepath = vim.fn.stdpath 'cache' .. '/server.pipe'
+      if not vim.loop.fs_stat(pipepath) then
+        vim.fn.serverstart(pipepath)
+      end
+
       require('mason-lspconfig').setup {
         handlers = {
           function(server_name)
+            if server_name == 'ruff' then
+              return
+            end
+
             local server = servers[server_name] or {}
+
             -- This handles overriding only values explicitly passed
             -- by the server configuration above. Useful when disabling
             -- certain features of an LSP (for example, turning off formatting for tsserver)
             server.capabilities = vim.tbl_deep_extend('force', {}, capabilities, server.capabilities or {})
+
+            -- if server_name == 'gdscript' then
+            --   server.force_setup = true
+            --   server.filetypes = { 'gd', 'gdscript', 'gdscript3' }
+            --   server.single_file_support = false
+            --   server.cmd = { 'ncat', '127.0.0.1', '6008' }
+            --   server.root_dir = require('mason-lspconfig').root_pattern('.git', '.project', '.gd', 'project.godot')
+            -- end
+
+            if server_name == 'ruff_lsp' then
+              local on_attach = function(client, bufnr)
+                if client.name == 'ruff_lsp' then
+                  -- Disable hover in favor of Pyright
+                  client.server_capabilities.hoverProvider = false
+                end
+              end
+
+              server.on_attach = on_attach
+            end
+
             require('lspconfig')[server_name].setup(server)
           end,
         },
@@ -633,20 +724,61 @@ require('lazy').setup({
       --  into multiple repos for maintenance purposes.
       'hrsh7th/cmp-nvim-lsp',
       'hrsh7th/cmp-path',
+
+      -- Custom
+      'onsails/lspkind-nvim',
     },
     config = function()
       -- See `:help cmp`
       local cmp = require 'cmp'
       local luasnip = require 'luasnip'
+      local lspkind = require 'lspkind'
       luasnip.config.setup {}
 
       cmp.setup {
         snippet = {
           expand = function(args)
             luasnip.lsp_expand(args.body)
+            -- vim.fn['vsnip#anonymous'](args.body)
           end,
         },
+        formatting = {
+          format = lspkind.cmp_format {
+            with_text = true,
+            menu = {
+              nvim_lsp = '[LSP]',
+              luasnip = '[LuaSnip]',
+              buffer = '[Buffer]',
+              path = '[Path]',
+            },
+            maxwidth = function()
+              return math.floor(0.45 * vim.o.columns)
+            end,
+            ellipsis_char = '...',
+            show_labelDetails = false,
+          },
+          -- format = function(entry, vim_item)
+          --   vim_item.kind = require('lspkind').presets.default[vim_item.kind] .. ' ' .. vim_item.kind
+          --   vim_item.menu = ({
+          --     nvim_lsp = '[LSP]',
+          --     luasnip = '[LuaSnip]',
+          --     buffer = '[Buffer]',
+          --     path = '[Path]',
+          --   })[entry.source.name]
+          --   return vim_item
+          -- end,
+          fields = { 'abbr', 'kind', 'menu' },
+          expandable_indicator = true,
+        },
         completion = { completeopt = 'menu,menuone,noinsert' },
+        -- window = {
+        --
+        --   documentation = {
+        --     border = 'rounded',
+        --     winhighlight = 'NormalFloat:NormalFloat,FloatBorder:NormalFloat',
+        --     zindex = 50,
+        --   },
+        -- },
 
         -- For an understanding of why these mappings were
         -- chosen, you will need to read `:help ins-completion`

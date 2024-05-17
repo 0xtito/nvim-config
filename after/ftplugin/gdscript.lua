@@ -1,0 +1,28 @@
+---@diagnostic disable: redefined-local, unused-local
+-- local function for_godot()
+--   local args = vim.fn.argv()
+--
+--   for _, args in ipairs(args) do
+--     print(args)
+--     if args == '-gt' then
+--       return true
+--     end
+--   end
+--   return false
+-- end
+--
+-- if for_godot() then
+--   local port = 6005
+--   local cmd = vim.lsp.rpc.connect('127.0.0.1', port)
+--   local pipe = '/godot/config/godot.pipe'
+--   vim.lsp.start {
+--     force_setup = true,
+--     single_file_support = true,
+--     name = 'Godot',
+--     cmd = cmd,
+--     root_dir = vim.fs.dirname(vim.fs.find({ 'project.godot', '.git' }, { upward = true })[1]),
+--     on_attach = function(client, bufnr)
+--       vim.api.nvim_command('echo serverstart("' .. pipe .. '")')
+--     end,
+--   }
+-- end

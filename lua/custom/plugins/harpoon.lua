@@ -99,7 +99,7 @@ return {
     -- Loop to set up key mappings for selecting, replacing, and closing files using Harpoon
     for i = 1, 9 do
       -- Select file mappings
-      vim.keymap.set('n', 'h' .. i, function()
+      vim.keymap.set('n', '<leader>h' .. i, function()
         harpoon:list():select(i)
       end, { desc = 'Harp: Select file ' .. i })
 
