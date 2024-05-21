@@ -3,10 +3,23 @@ return {
   event = 'VeryLazy',
   config = function()
     local gpt = require 'chatgpt'
-    gpt.setup {
-      api_key_cmd = 'op read op://cli-private/neovim_openai/password --no-newline',
-    }
 
+    local function has_arg(arg)
+      for _, v in ipairs(vim.v.argv) do
+        if v == arg then
+          return true
+        end
+      end
+      return false
+    end
+
+    if has_arg 'ai' then
+      gpt.setup {
+        api_key_cmd = 'op read op://cli-private/neovim_openai/password --no-newline',
+      }
+    else
+      gpt.setup {}
+    end
     -- Keymaps all start with `a` for "AI", except for opening
     vim.keymap.set('n', '<C-a>', function()
       gpt.openChat()

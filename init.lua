@@ -1,10 +1,47 @@
+--- Neovim configuration file ---
+-- TODO: Make compatible for windows and mac
+
 -- See `:help mapleader`
 --  NOTE: Must happen before plugins are loaded (otherwise wrong leader will be used)
 vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
+-- Cursor
+-- vim.opt.guicursor = 'n-v-c:block-Cursor,i-ci-ve:ver25-CursorInsert'
 
 -- Set to true if you have a Nerd Font installed and selected in the terminal
-vim.g.have_nerd_font = false
+vim.g.have_nerd_font = true
+
+-- setting which os im on to a global var
+
+if vim.fn.exists 'g:os' == 0 then
+  local is_windows = vim.fn.has 'win64' == 1 or vim.fn.has 'win32' == 1
+  if is_windows then
+    vim.g.os = 'Windows'
+    vim.g.SUPER = 'C'
+
+    -- Check if 'pwsh' is executable, otherwise use 'powershell'
+    local powershell_options = {
+      shell = vim.fn.executable 'pwsh' == 1 and 'pwsh' or 'powershell',
+      shellcmdflag = '-NoLogo -NoProfile -ExecutionPolicy RemoteSigned -Command [Console]::InputEncoding=[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;',
+      shellredir = '-RedirectStandardOutput %s -NoNewWindow -Wait',
+      shellpipe = '2>&1 | Out-File -Encoding UTF8 %s; exit $LastExitCode',
+      shellquote = '',
+      shellxquote = '',
+    }
+
+    for option, value in pairs(powershell_options) do
+      vim.opt[option] = value
+    end
+  else
+    local uname_output = vim.fn.system 'uname'
+    if uname_output:find 'Darwin' then
+      vim.g.os = 'MacOS'
+      vim.g.SUPER = 'D'
+    else
+      vim.g.os = string.gsub(uname_output, '\n', '')
+    end
+  end
+end
 
 -- [[ Setting options ]]
 -- See `:help vim.opt`
@@ -83,11 +120,34 @@ vim.keymap.set('n', '<leader>dL', function()
   end
 end, { desc = '[D]elete [L]ines containing' })
 
+-- Define the function to replace strings with case sensitivity
+function ReplaceStrings(old_str, new_str)
+  -- Get the current buffer content
+  local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+
+  -- Replace the old_str with new_str in each line
+  for i, line in ipairs(lines) do
+    lines[i] = line:gsub(old_str, new_str)
+  end
+
+  -- Set the modified lines back to the buffer
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
+end
+-- Create a command to call the function with arguments
+vim.api.nvim_create_user_command('ReplaceWithArgs', function(opts)
+  local old_str = opts.fargs[1]
+  local new_str = opts.fargs[2]
+  ReplaceStrings(old_str, new_str)
+end, { desc = 'Replace strings' })
+
+-- Bind the command to <leader>rW
+vim.keymap.set('n', '<leader>rW', ':ReplaceWithArgs ', { silent = false, desc = 'Replace strings with args' })
+
 -- Easily navigate through panes
-vim.keymap.set('n', '<C-k>', '<C-w>k', { silent = true, desc = 'Move to the split above' })
-vim.keymap.set('n', '<C-j>', '<C-w>j', { silent = true, desc = 'Move to the split below' })
-vim.keymap.set('n', '<C-h>', '<C-w>h', { silent = true, desc = 'Move to the split on the left' })
-vim.keymap.set('n', '<C-l>', '<C-w>l', { silent = true, desc = 'Move to the split on the right' })
+vim.keymap.set('n', '<' .. vim.g.SUPER .. '-k>', '<' .. vim.g.SUPER .. '-w>k', { silent = true, desc = 'Move to the split above' })
+vim.keymap.set('n', '<' .. vim.g.SUPER .. '-j>', '<' .. vim.g.SUPER .. '-w>j', { silent = true, desc = 'Move to the split below' })
+vim.keymap.set('n', '<' .. vim.g.SUPER .. '-h>', '<' .. vim.g.SUPER .. '-w>h', { silent = true, desc = 'Move to the split on the left' })
+vim.keymap.set('n', '<' .. vim.g.SUPER .. '-l>', '<' .. vim.g.SUPER .. '-w>l', { silent = true, desc = 'Move to the split on the right' })
 
 -- [[ Basic Keymaps ]]
 --  See `:help vim.keymap.set()`
@@ -101,6 +161,17 @@ vim.keymap.set('n', '[d', vim.diagnostic.goto_prev, { desc = 'Go to previous [D]
 vim.keymap.set('n', ']d', vim.diagnostic.goto_next, { desc = 'Go to next [D]iagnostic message' })
 vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float, { desc = 'Show diagnostic [E]rror messages' })
 vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagnostic [Q]uickfix list' })
+
+-- Updating Diagnostic config
+vim.diagnostic.config {
+  underline = true,
+  virtual_text = {
+    spacing = 4,
+    prefix = '',
+  },
+  signs = true,
+  -- update_in_insert = false,
+}
 
 -- Exit terminal mode in the builtin terminal with a shortcut that is a bit easier
 -- for people to discover. Otherwise, you normally need to press <C-\><C-n>, which
@@ -514,11 +585,11 @@ require('lazy').setup({
         -- },
         --
 
-        clangd = {
-          capabilities = {
-            offsetencoding = { 'utf-16' },
-          },
-        },
+        -- clangd = {
+        --   capabilities = {
+        --     offsetencoding = { 'utf-16' },
+        --   },
+        -- },
 
         lua_ls = {
           -- cmd = {...},
@@ -544,55 +615,6 @@ require('lazy').setup({
       --  You can press `g?` for help in this menu.
       require('mason').setup()
 
-      -- Adding in configuration for Godot + GDScript
-      -- local port = 6005
-      -- local cmd = vim.lsp.rpc.connect('127.0.0.1', port)
-      -- local pipe = '/godot/config/godot.pipe'
-      --
-      -- vim.lsp.start {
-      --   name = 'Godot',
-      --   cmd = cmd,
-      --   root_dir = vim.fs.dirname(vim.fs.find({ 'project.godot', '.git' }, { upward = true })[1]),
-      --   on_attach = function(client, bufnr)
-      --     vim.api.nvim_command('echo serverstart("' .. pipe .. '")')
-      --   end,
-      -- }
-
-      --------
-      -- Godot External Config for the below setup
-      -- Exec Path: run `which nvim` to get the path to your nvim binary
-      -- Exec Flags: --server /godot/config/godot.pipe --remote-send "<esc>:n {file}<CR>:call cursor({line},{col})<CR>"
-
-      -- local function for_godot()
-      --   local args = vim.fn.argv()
-      --
-      --   ---@diagnostic disable-next-line: redefined-local
-      --   for _, args in ipairs(args) do
-      --     print(args)
-      --     if args == '-gt' then
-      --       return true
-      --     end
-      --   end
-      --   return false
-      -- end
-      --
-      -- if for_godot() then
-      --   local port = 6005
-      --   local cmd = vim.lsp.rpc.connect('127.0.0.1', port)
-      --   local pipe = '/godot/config/godot.pipe'
-      --   vim.lsp.start {
-      --     force_setup = true,
-      --     single_file_support = true,
-      --     name = 'Godot',
-      --     cmd = cmd,
-      --     root_dir = vim.fs.dirname(vim.fs.find({ 'project.godot', '.git' }, { upward = true })[1]),
-      --     ---@diagnostic disable-next-line: unused-local
-      --     on_attach = function(client, bufnr)
-      --       vim.api.nvim_command('echo serverstart("' .. pipe .. '")')
-      --     end,
-      --   }
-      -- end
-
       -- You can add other tools here that you want Mason to install
       -- for you, so that they are available from within Neovim.
       local ensure_installed = vim.tbl_keys(servers or {})
@@ -600,15 +622,6 @@ require('lazy').setup({
         'stylua', -- Used to format Lua code
       })
       require('mason-tool-installer').setup { ensure_installed = ensure_installed }
-
-      -- Setup LSP servers
-      local lspconfig = require 'lspconfig'
-      lspconfig.gdscript.setup {}
-
-      local pipepath = vim.fn.stdpath 'cache' .. '/server.pipe'
-      if not vim.loop.fs_stat(pipepath) then
-        vim.fn.serverstart(pipepath)
-      end
 
       require('mason-lspconfig').setup {
         handlers = {
@@ -619,10 +632,16 @@ require('lazy').setup({
 
             local server = servers[server_name] or {}
 
+            local overrides = {}
+
+            if server_name == 'clangd' then
+              overrides.offsetEncoding = { 'utf-16' }
+            end
+
             -- This handles overriding only values explicitly passed
             -- by the server configuration above. Useful when disabling
             -- certain features of an LSP (for example, turning off formatting for tsserver)
-            server.capabilities = vim.tbl_deep_extend('force', {}, capabilities, server.capabilities or {})
+            server.capabilities = vim.tbl_deep_extend('force', {}, capabilities, server.capabilities or overrides)
 
             -- if server_name == 'gdscript' then
             --   server.force_setup = true
@@ -633,6 +652,7 @@ require('lazy').setup({
             -- end
 
             if server_name == 'ruff_lsp' then
+              ---@diagnostic disable-next-line: unused-local
               local on_attach = function(client, bufnr)
                 if client.name == 'ruff_lsp' then
                   -- Disable hover in favor of Pyright
@@ -643,10 +663,33 @@ require('lazy').setup({
               server.on_attach = on_attach
             end
 
+            -- if server_name == 'clangd' then
+            --   print('Setting up ' .. server_name)
+            --   print(vim.inspect(server))
+            -- end
+
             require('lspconfig')[server_name].setup(server)
           end,
         },
       }
+
+      -- setting up gdscript for windows
+      local lspconfig = require 'lspconfig'
+      local gdscript_config = {
+        capabilities = capabilities,
+        settings = {},
+      }
+      if vim.g.os == 'Windows' then
+        gdscript_config['cmd'] = { 'ncat', 'localhost', os.getenv 'GDSCRIPT_PORT' or '6005' }
+        lspconfig.gdscript.setup(gdscript_config)
+      else
+        lspconfig.gdscript.setup {}
+        --[[ TODO: change / to \ for windows]]
+        local pipepath = vim.fn.stdpath 'cache' .. '\\server.pipe'
+        if not vim.loop.fs_stat(pipepath) and vim.fn.filereadable(vim.fn.getcwd() .. '\\project.godot') then
+          vim.fn.serverstart(pipepath)
+        end
+      end
     end,
   },
 
@@ -685,6 +728,7 @@ require('lazy').setup({
         javascript = { { 'prettierd', 'prettier' } },
         typescript = { { 'prettierd', 'prettier' } },
         typescriptreact = { { 'prettierd', 'prettier' } },
+        clang = { 'clang-format' },
       },
     },
   },
@@ -902,7 +946,21 @@ require('lazy').setup({
     'nvim-treesitter/nvim-treesitter',
     build = ':TSUpdate',
     opts = {
-      ensure_installed = { 'bash', 'c', 'html', 'lua', 'luadoc', 'markdown', 'vim', 'vimdoc', 'javascript', 'typescript', 'rust' },
+      ensure_installed = {
+        'bash',
+        'c',
+        'cpp',
+        'html',
+        'lua',
+        'luadoc',
+        'markdown',
+        'markdown_inline',
+        'vim',
+        'vimdoc',
+        'javascript',
+        'typescript',
+        'rust',
+      },
       -- Autoinstall languages that are not installed
       auto_install = true,
       highlight = {
@@ -940,7 +998,7 @@ require('lazy').setup({
   --  Here are some example plugins that I've included in the Kickstart repository.
   --  Uncomment any of the lines below to enable them (you will need to restart nvim).
   --
-  -- require 'kickstart.plugins.debug',
+  require 'kickstart.plugins.debug',
   -- require 'kickstart.plugins.indent_line',
   -- require 'kickstart.plugins.lint',
   require 'kickstart.plugins.autopairs',
@@ -977,3 +1035,7 @@ require('lazy').setup({
 
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et
+
+if vim.fn.filereadable(vim.fn.getcwd() .. '/project.godot') == 1 and vim.g.os == 'Windows' then
+  vim.fn.serverstart '127.0.0.1:6004'
+end
