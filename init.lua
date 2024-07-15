@@ -23,7 +23,8 @@ if vim.fn.exists 'g:os' == 0 then
     local powershell_options = {
       shell = vim.fn.executable 'pwsh' == 1 and 'pwsh' or 'powershell',
       shellcmdflag = '-NoLogo -NoProfile -ExecutionPolicy RemoteSigned -Command [Console]::InputEncoding=[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;',
-      shellredir = '-RedirectStandardOutput %s -NoNewWindow -Wait',
+      -- shellredir = '-RedirectStandardOutput %s -NoNewWindow -Wait',
+      shellredir = '2>&1 | Out-File -Encoding UTF8 %s; exit $LastExitCode',
       shellpipe = '2>&1 | Out-File -Encoding UTF8 %s; exit $LastExitCode',
       shellquote = '',
       shellxquote = '',
@@ -93,7 +94,9 @@ vim.opt.splitbelow = true
 --  See `:help 'list'`
 --  and `:help 'listchars'`
 vim.opt.list = true
-vim.opt.listchars = { tab = '» ', trail = '·', nbsp = '␣' }
+-- vim.opt.listchars = { tab = '» ', trail = '·', nbsp = '␣' }
+
+vim.opt.listchars = { tab = '| ', trail = '·', nbsp = '␣' }
 
 -- Preview substitutions live, as you type!
 vim.opt.inccommand = 'split'
@@ -296,6 +299,7 @@ require('lazy').setup({
         ['<leader>gh'] = { name = '[G]it [H]unk', _ = 'which_key_ignore' },
         ['<leader>h'] = { name = '[H]arpoon', _ = 'which_key_ignore' },
         ['<leader>a'] = { name = '[A]I', _ = 'which_key_ignore' },
+        ['<leader>z'] = { name = '[Z]en Mode', _ = 'which_key_ignore' },
       }
       -- visual mode
       require('which-key').register({
@@ -620,6 +624,7 @@ require('lazy').setup({
       local ensure_installed = vim.tbl_keys(servers or {})
       vim.list_extend(ensure_installed, {
         'stylua', -- Used to format Lua code
+        'gdtoolkit',
       })
       require('mason-tool-installer').setup { ensure_installed = ensure_installed }
 
@@ -673,22 +678,35 @@ require('lazy').setup({
         },
       }
 
+      local function has_arg(arg)
+        for _, v in ipairs(vim.v.argv) do
+          if v == arg then
+            return true
+          end
+        end
+        return false
+      end
+
       -- setting up gdscript for windows
       local lspconfig = require 'lspconfig'
       local gdscript_config = {
         capabilities = capabilities,
         settings = {},
       }
-      if vim.g.os == 'Windows' then
-        gdscript_config['cmd'] = { 'ncat', 'localhost', os.getenv 'GDSCRIPT_PORT' or '6005' }
-        lspconfig.gdscript.setup(gdscript_config)
-      else
-        lspconfig.gdscript.setup {}
-        --[[ TODO: change / to \ for windows]]
-        local pipepath = vim.fn.stdpath 'cache' .. '\\server.pipe'
-        if not vim.loop.fs_stat(pipepath) and vim.fn.filereadable(vim.fn.getcwd() .. '\\project.godot') then
-          vim.fn.serverstart(pipepath)
+
+      if has_arg 'gt' then
+        if vim.g.os == 'Windows' then
+          gdscript_config['cmd'] = { 'ncat', 'localhost', os.getenv 'GDSCRIPT_PORT' or '6005' }
+          lspconfig.gdscript.setup(gdscript_config)
+        else
+          lspconfig.gdscript.setup {}
+          local pipepath = vim.fn.stdpath 'cache' .. '/server.pipe'
+          if not vim.loop.fs_stat(pipepath) and vim.fn.filereadable(vim.fn.getcwd() .. '/project.godot') then
+            vim.fn.serverstart(pipepath)
+          end
         end
+      else
+        lspconfig.gdscript.setup(gdscript_config)
       end
     end,
   },
@@ -712,7 +730,7 @@ require('lazy').setup({
         -- Disable "format_on_save lsp_fallback" for languages that don't
         -- have a well standardized coding style. You can add additional
         -- languages here or re-enable it for the disabled ones.
-        local disable_filetypes = { c = true, cpp = true }
+        local disable_filetypes = { c = false, cpp = false, gdscript = false, lua = false }
         return {
           timeout_ms = 500,
           lsp_fallback = not disable_filetypes[vim.bo[bufnr].filetype],
@@ -730,6 +748,8 @@ require('lazy').setup({
         typescriptreact = { { 'prettierd', 'prettier' } },
         cpp = { 'clang-format' },
         c = { 'clang-format' },
+        gdscript = { 'gdtoolkit' },
+        markdown = { 'prettier', 'prettierd' },
       },
     },
   },
@@ -1040,3 +1060,36 @@ require('lazy').setup({
 if vim.fn.filereadable(vim.fn.getcwd() .. '/project.godot') == 1 and vim.g.os == 'Windows' then
   vim.fn.serverstart '127.0.0.1:6004'
 end
+
+-- Compile and run C++ code (basic script)
+function compile_and_run_cpp()
+  -- Get the current file name and extension
+  local file = vim.fn.expand '%:p'
+  local file_ext = vim.fn.expand '%:e'
+  -- Check if the file extension is cpp or h
+  if file_ext == 'cpp' or file_ext == 'h' then
+    -- Compile the current file with g++
+    local compile_cmd = 'g++ -std=c++17 ' .. file
+    vim.cmd('! ' .. compile_cmd)
+
+    -- Run the compiled file if compilation was successful
+    if vim.v.shell_error == 0 then
+      vim.cmd '! ./a.exe'
+    else
+      print 'Compilation failed!'
+    end
+  else
+    print 'This command can only be run on .cpp or .h files'
+  end
+end
+-- Map <leader>cr to the compile_and_run_cpp function
+vim.api.nvim_set_keymap('n', '<leader>cr', ':lua compile_and_run_cpp()<CR>', { noremap = true, silent = true })
+
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = 'gdscript',
+  callback = function()
+    vim.keymap.set('n', '<leader>Gr', function()
+      vim.cmd 'silent !godot '
+    end, { buffer = true, desc = 'Run Godot' })
+  end,
+})

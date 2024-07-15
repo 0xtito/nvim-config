@@ -18,7 +18,7 @@ return {
         api_key_cmd = 'op read op://cli-private/neovim_openai/password --no-newline',
       }
     else
-      gpt.setup {}
+      -- gpt.setup {}
     end
     -- Keymaps all start with `a` for "AI", except for opening
     vim.keymap.set('n', '<C-a>', function()
@@ -116,7 +116,7 @@ return {
   dependencies = {
     'MunifTanjim/nui.nvim',
     'nvim-lua/plenary.nvim',
-    'folke/trouble.nvim',
+    -- 'folke/trouble.nvim',
     'nvim-telescope/telescope.nvim',
   },
 }

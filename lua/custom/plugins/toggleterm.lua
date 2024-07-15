@@ -31,5 +31,37 @@ return {
     vim.keymap.set('n', '<leader>th', function()
       tt.toggle(nil, nil, '15', 'horizontal', nil)
     end, { desc = 'Toggle Terminal (Horiztonal)' })
+
+    local filetype_commands = setmetatable({}, {
+      __index = function()
+        return "echo 'You need to set a command for this filetype'"
+      end,
+    })
+
+    local function get_current_filetype()
+      return vim.bo.filetype
+    end
+
+    -- Set the command for the current filetype
+    vim.keymap.set('n', '<leader>tS', function()
+      local filetype = get_current_filetype()
+      -- local command = vim.fn.input 'Enter Command for ' .. filetype .. ': '
+      local command = vim.fn.input 'Enter Command: '
+      if command and command ~= '' then
+        filetype_commands[filetype] = command
+        print('Command saved for ' .. filetype .. ': ' .. command)
+      end
+    end, { desc = 'Terminal Set' })
+
+    vim.keymap.set('n', '<F9>', function()
+      local filetype = get_current_filetype()
+      local command = filetype_commands[filetype]
+      if command then
+        -- tt.send_lines_to_terminal(command)
+        tt.exec(command)
+      else
+        print('No command set for ' .. filetype)
+      end
+    end, { desc = 'Terminal Run' })
   end,
 }
