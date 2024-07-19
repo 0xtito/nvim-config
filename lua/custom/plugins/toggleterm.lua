@@ -32,36 +32,52 @@ return {
       tt.toggle(nil, nil, '15', 'horizontal', nil)
     end, { desc = 'Toggle Terminal (Horiztonal)' })
 
-    local filetype_commands = setmetatable({}, {
-      __index = function()
-        return "echo 'You need to set a command for this filetype'"
-      end,
-    })
+    -- local filetype_commands = setmetatable({}, {
+    --   __index = function()
+    --     return "echo 'You need to set a command for this filetype'"
+    --   end,
+    -- })
 
     local function get_current_filetype()
       return vim.bo.filetype
     end
 
-    -- Set the command for the current filetype
-    vim.keymap.set('n', '<leader>tS', function()
-      local filetype = get_current_filetype()
-      -- local command = vim.fn.input 'Enter Command for ' .. filetype .. ': '
-      local command = vim.fn.input 'Enter Command: '
-      if command and command ~= '' then
-        filetype_commands[filetype] = command
-        print('Command saved for ' .. filetype .. ': ' .. command)
-      end
-    end, { desc = 'Terminal Set' })
+    local filetype_commands = {
+      [1] = {},
+      [2] = {},
+      [3] = {},
+    }
 
-    vim.keymap.set('n', '<F9>', function()
-      local filetype = get_current_filetype()
-      local command = filetype_commands[filetype]
-      if command then
-        -- tt.send_lines_to_terminal(command)
-        tt.exec(command)
-      else
-        print('No command set for ' .. filetype)
+    -- Set the command for the current filetype
+    local function set_command(index)
+      return function()
+        local filetype = get_current_filetype()
+        local command = vim.fn.input('Enter Command for F' .. (index + 8) .. ': ')
+        if command and command ~= '' then
+          filetype_commands[index][filetype] = command
+          print('Command saved for F' .. (index + 8) .. ' on ' .. filetype .. ': ' .. command)
+        end
       end
-    end, { desc = 'Terminal Run' })
+    end
+
+    vim.keymap.set('n', '<leader>ts1', set_command(1), { desc = 'Terminal Set F9' })
+    vim.keymap.set('n', '<leader>ts2', set_command(2), { desc = 'Terminal Set F10' })
+    vim.keymap.set('n', '<leader>ts3', set_command(3), { desc = 'Terminal Set F11' })
+
+    local function run_command(index)
+      return function()
+        local filetype = get_current_filetype()
+        local command = filetype_commands[index][filetype]
+        if command then
+          tt.exec(command)
+        else
+          print('No command set for F' .. (index + 8) .. ' on ' .. filetype)
+        end
+      end
+    end
+
+    vim.keymap.set('n', '<F9>', run_command(1), { desc = 'Terminal Run F9' })
+    vim.keymap.set('n', '<F10>', run_command(2), { desc = 'Terminal Run F10' })
+    vim.keymap.set('n', '<F11>', run_command(3), { desc = 'Terminal Run F11' })
   end,
 }
