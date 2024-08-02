@@ -1,5 +1,10 @@
 --- Neovim configuration file ---
--- TODO: Make compatible for windows and mac
+
+function _G.config_path(dir, ...)
+  local sep = package.config:sub(1, 1)
+  local segments = { dir, ... }
+  return table.concat(segments, sep):gsub('[\\/]', sep)
+end
 
 -- See `:help mapleader`
 --  NOTE: Must happen before plugins are loaded (otherwise wrong leader will be used)
@@ -145,6 +150,35 @@ end, { desc = 'Replace strings' })
 
 -- Bind the command to <leader>rW
 vim.keymap.set('n', '<leader>rW', ':ReplaceWithArgs ', { silent = false, desc = 'Replace strings with args' })
+
+local function replace_highlighted()
+  return function()
+    -- Get the highlighted text
+    local start_pos = vim.fn.getpos "'<"
+    local end_pos = vim.fn.getpos "'>"
+    local lines = vim.fn.getline(start_pos[2], end_pos[2])
+    local n = #lines
+    if n == 0 then
+      return
+    end
+
+    lines[1] = string.sub(lines[1], start_pos[3], -1)
+    lines[n] = string.sub(lines[n], 1, end_pos[3] - ((start_pos[2] == end_pos[2]) and start_pos[3] or 0))
+    local highlighted_text = table.concat(lines, '\n')
+
+    -- Escape special characters in the highlighted text
+    highlighted_text = vim.fn.escape(highlighted_text, [[\/.*~$]])
+
+    -- Prompt for replacement text
+    local replacement = vim.fn.input 'Replace with: '
+
+    -- Perform the replacement
+    vim.cmd(string.format('%%s/\\V%s/%s/g', highlighted_text, replacement))
+  end
+end
+
+-- Set up the keybinding
+vim.keymap.set('v', '<leader>RA', replace_highlighted(), { noremap = true, silent = true })
 
 -- Easily navigate through panes
 vim.keymap.set('n', '<' .. vim.g.SUPER .. '-k>', '<' .. vim.g.SUPER .. '-w>k', { silent = true, desc = 'Move to the split above' })
@@ -595,6 +629,12 @@ require('lazy').setup({
         --   },
         -- },
 
+        -- Adding locally built zls to lspconfig
+        -- zls = {
+        --   cmd = { 'zls' },
+        --   filetypes = { 'zig' },
+        -- settings = {},
+        -- },
         lua_ls = {
           -- cmd = {...},
           -- filetypes = { ...},
@@ -611,6 +651,12 @@ require('lazy').setup({
         },
       }
 
+      -- Integrating zls with lspconfig, outside of Mason
+      require('lspconfig').zls.setup {
+        -- cmd = { 'zls' },
+        -- filetypes = { 'zig' },
+      }
+
       -- Ensure the servers and tools above are installed
       --  To check the current status of installed tools and/or manually install
       --  other tools, you can run
@@ -624,36 +670,34 @@ require('lazy').setup({
       local ensure_installed = vim.tbl_keys(servers or {})
       vim.list_extend(ensure_installed, {
         'stylua', -- Used to format Lua code
-        'gdtoolkit',
+        -- 'gdtoolkit',
       })
       require('mason-tool-installer').setup { ensure_installed = ensure_installed }
 
       require('mason-lspconfig').setup {
         handlers = {
           function(server_name)
+            local server = servers[server_name] or {}
+            local overrides = {}
+
             if server_name == 'ruff' then
               return
             end
-
-            local server = servers[server_name] or {}
-
-            local overrides = {}
 
             if server_name == 'clangd' then
               overrides.offsetEncoding = { 'utf-16' }
             end
 
-            -- This handles overriding only values explicitly passed
-            -- by the server configuration above. Useful when disabling
-            -- certain features of an LSP (for example, turning off formatting for tsserver)
-            server.capabilities = vim.tbl_deep_extend('force', {}, capabilities, server.capabilities or overrides)
-
-            -- if server_name == 'gdscript' then
-            --   server.force_setup = true
-            --   server.filetypes = { 'gd', 'gdscript', 'gdscript3' }
-            --   server.single_file_support = false
-            --   server.cmd = { 'ncat', '127.0.0.1', '6008' }
-            --   server.root_dir = require('mason-lspconfig').root_pattern('.git', '.project', '.gd', 'project.godot')
+            -- if server_name == 'zls' then
+            --   print('Setting up ' .. server_name)
+            --   overrides = {
+            --     zls = {
+            --       path = 'C:/Users/tito/AppData/Local/nvim-data/mason/packages/zls/zls.exe',
+            --     },
+            --     checkOnSave = {
+            --       enable = true,
+            --     },
+            --   }
             -- end
 
             if server_name == 'ruff_lsp' then
@@ -668,10 +712,10 @@ require('lazy').setup({
               server.on_attach = on_attach
             end
 
-            -- if server_name == 'clangd' then
-            --   print('Setting up ' .. server_name)
-            --   print(vim.inspect(server))
-            -- end
+            -- This handles overriding only values explicitly passed
+            -- by the server configuration above. Useful when disabling
+            -- certain features of an LSP (for example, turning off formatting for tsserver)
+            server.capabilities = vim.tbl_deep_extend('force', {}, capabilities, server.capabilities or overrides)
 
             require('lspconfig')[server_name].setup(server)
           end,
@@ -730,7 +774,7 @@ require('lazy').setup({
         -- Disable "format_on_save lsp_fallback" for languages that don't
         -- have a well standardized coding style. You can add additional
         -- languages here or re-enable it for the disabled ones.
-        local disable_filetypes = { c = false, cpp = false, gdscript = false, lua = false }
+        local disable_filetypes = { c = true, cpp = true, objc = true, gdscript = false, lua = false }
         return {
           timeout_ms = 500,
           lsp_fallback = not disable_filetypes[vim.bo[bufnr].filetype],
@@ -747,7 +791,8 @@ require('lazy').setup({
         typescript = { { 'prettierd', 'prettier' } },
         typescriptreact = { { 'prettierd', 'prettier' } },
         cpp = { 'clang-format' },
-        c = { 'clang-format' },
+        json = { 'prettierd' },
+        -- c = { 'clang-format' },
         gdscript = { 'gdtoolkit' },
         markdown = { 'prettier', 'prettierd' },
       },
@@ -1093,3 +1138,11 @@ vim.api.nvim_create_autocmd('FileType', {
     end, { buffer = true, desc = 'Run Godot' })
   end,
 })
+
+local function display_time()
+  local current_time = os.date '%H:%M:%S'
+  vim.api.nvim_echo({ { current_time, 'Normal' } }, false, {})
+end
+
+-- NOTE: Mapping to display current time
+vim.keymap.set('n', '<leader>tt', display_time, { noremap = true, silent = true })

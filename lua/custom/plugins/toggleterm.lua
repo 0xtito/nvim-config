@@ -79,5 +79,23 @@ return {
     vim.keymap.set('n', '<F9>', run_command(1), { desc = 'Terminal Run F9' })
     vim.keymap.set('n', '<F10>', run_command(2), { desc = 'Terminal Run F10' })
     vim.keymap.set('n', '<F11>', run_command(3), { desc = 'Terminal Run F11' })
+
+    -- Function to cancel the currently running command
+    local function cancel_command()
+      tt.exec(string.char(3))
+
+      -- local terminals = tt.get_all()
+      -- for _, term in ipairs(terminals) do
+      --   if term.terminal and term.terminal.is_open then
+      --     term:send(string.char(3)) -- Send Ctrl-C
+      --     print 'Cancelled running command in terminal'
+      --     return
+      --   end
+      -- end
+      -- print 'No active terminal found'
+    end
+
+    -- Set keybinding for F12 to cancel the running command
+    vim.keymap.set('n', '<F12>', cancel_command, { desc = 'Cancel Terminal Command' })
   end,
 }
