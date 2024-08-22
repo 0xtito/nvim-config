@@ -2,36 +2,52 @@ return {
   {
     'folke/trouble.nvim',
     branch = 'main',
-    opts = {}, -- for default options, refer to the configuration section for custom setup.
-    cmd = 'Trouble',
+    opts = {
+      modes = {
+        preview_float = {
+          mode = 'diagnostics',
+          preview = {
+            type = 'float',
+            relative = 'editor',
+            border = 'rounded',
+            title = 'Preview',
+            title_pos = 'center',
+            position = { 0, -2 },
+            size = { width = 0.3, height = 0.3 },
+            zindex = 200,
+          },
+        },
+      },
+    }, -- for default options, refer to the configuration section for custom setup.
+    -- cmd = 'Trouble',
     keys = {
       {
-        '<leader>xx',
+        '<leader>tx',
         '<cmd>Trouble diagnostics toggle<cr>',
         desc = 'Diagnostics (Trouble)',
       },
       {
-        '<leader>xX',
+        '<leader>tX',
         '<cmd>Trouble diagnostics toggle filter.buf=0<cr>',
         desc = 'Buffer Diagnostics (Trouble)',
       },
       {
-        '<leader>cs',
+        '<leader>S',
         '<cmd>Trouble symbols toggle focus=false<cr>',
         desc = 'Symbols (Trouble)',
       },
       {
-        '<leader>cl',
+        '<leader>tl',
         '<cmd>Trouble lsp toggle focus=false win.position=right<cr>',
         desc = 'LSP Definitions / references / ... (Trouble)',
       },
       {
-        '<leader>xL',
+        '<leader>tL',
         '<cmd>Trouble loclist toggle<cr>',
         desc = 'Location List (Trouble)',
       },
       {
-        '<leader>xQ',
+        '<leader>tQ',
         '<cmd>Trouble qflist toggle<cr>',
         desc = 'Quickfix List (Trouble)',
       },

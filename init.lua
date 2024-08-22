@@ -45,6 +45,7 @@ if vim.fn.exists 'g:os' == 0 then
       vim.g.SUPER = 'D'
     else
       vim.g.os = string.gsub(uname_output, '\n', '')
+      vim.g.SUPER = 'C'
     end
   end
 end
@@ -224,8 +225,6 @@ vim.keymap.set('n', '<right>', '<cmd>echo "Use l to move!!"<CR>')
 vim.keymap.set('n', '<up>', '<cmd>echo "Use k to move!!"<CR>')
 vim.keymap.set('n', '<down>', '<cmd>echo "Use j to move!!"<CR>')
 
--- Keybinds to make split navigation easier.
---  Use CTRL+<hjkl> to switch between windows
 --
 --  See `:help wincmd` for a list of all window commands
 vim.keymap.set('n', '<C-h>', '<C-w><C-h>', { desc = 'Move focus to the left window' })
@@ -327,13 +326,16 @@ require('lazy').setup({
         ['<leader>c'] = { name = '[C]ode', _ = 'which_key_ignore' },
         ['<leader>d'] = { name = '[D]ocument', _ = 'which_key_ignore' },
         ['<leader>r'] = { name = '[R]ename', _ = 'which_key_ignore' },
-        ['<leader>s'] = { name = '[S]earch', _ = 'which_key_ignore' },
+        ['<leader>s'] = { name = '[s]earch', _ = 'which_key_ignore' },
+        ['<leader>S'] = { name = 'Trouble [S]ymbols', _ = 'which_key_ignore' },
         ['<leader>w'] = { name = '[W]orkspace', _ = 'which_key_ignore' },
-        ['<leader>t'] = { name = '[T]oggle', _ = 'which_key_ignore' },
+        ['<leader>t'] = { name = '[t]rouble', _ = 'which_key_ignore' },
         ['<leader>gh'] = { name = '[G]it [H]unk', _ = 'which_key_ignore' },
         ['<leader>h'] = { name = '[H]arpoon', _ = 'which_key_ignore' },
         ['<leader>a'] = { name = '[A]I', _ = 'which_key_ignore' },
         ['<leader>z'] = { name = '[Z]en Mode', _ = 'which_key_ignore' },
+        ['<leader>o'] = { name = '[O]pen Scratch Pad', _ = 'which_key_ignore' },
+        ['<leader>T'] = { name = '[T]oggleterm', _ = 'which_key_ignore' },
       }
       -- visual mode
       require('which-key').register({
@@ -653,8 +655,8 @@ require('lazy').setup({
 
       -- Integrating zls with lspconfig, outside of Mason
       require('lspconfig').zls.setup {
-        -- cmd = { 'zls' },
-        -- filetypes = { 'zig' },
+        cmd = { 'zls' },
+        filetypes = { 'zig', 'zon' },
       }
 
       -- Ensure the servers and tools above are installed
@@ -687,18 +689,6 @@ require('lazy').setup({
             if server_name == 'clangd' then
               overrides.offsetEncoding = { 'utf-16' }
             end
-
-            -- if server_name == 'zls' then
-            --   print('Setting up ' .. server_name)
-            --   overrides = {
-            --     zls = {
-            --       path = 'C:/Users/tito/AppData/Local/nvim-data/mason/packages/zls/zls.exe',
-            --     },
-            --     checkOnSave = {
-            --       enable = true,
-            --     },
-            --   }
-            -- end
 
             if server_name == 'ruff_lsp' then
               ---@diagnostic disable-next-line: unused-local
@@ -1055,21 +1045,12 @@ require('lazy').setup({
     end,
   },
 
-  -- The following two comments only work if you have downloaded the kickstart repo, not just copy pasted the
-  -- init.lua. If you want these files, they are in the repository, so you can just download them and
-  -- place them in the correct locations.
-
-  -- NOTE: Next step on your Neovim journey: Add/Configure additional plugins for Kickstart
-  --
-  --  Here are some example plugins that I've included in the Kickstart repository.
-  --  Uncomment any of the lines below to enable them (you will need to restart nvim).
-  --
   require 'kickstart.plugins.debug',
   -- require 'kickstart.plugins.indent_line',
   -- require 'kickstart.plugins.lint',
   require 'kickstart.plugins.autopairs',
   -- require 'kickstart.plugins.neo-tree',
-  -- require 'kickstart.plugins.gitsigns', -- adds gitsigns recommend keymaps
+  require 'kickstart.plugins.gitsigns', -- adds gitsigns recommend keymaps
 
   -- NOTE: The import below can automatically add your own plugins, configuration, etc from `lua/custom/plugins/*.lua`
   --    This is the easiest way to modularize your config.
@@ -1146,3 +1127,54 @@ end
 
 -- NOTE: Mapping to display current time
 vim.keymap.set('n', '<leader>tt', display_time, { noremap = true, silent = true })
+
+local scratch_buffer = nil
+local last_buffer = nil
+
+local function get_path_separator()
+  return vim.loop.os_uname().sysname:match 'Windows' and '\\' or '/'
+end
+
+local function open_scratch_buffer()
+  local path_sep = get_path_separator()
+  local scratch_dir = vim.fn.stdpath 'data' .. path_sep .. 'scratch'
+  local scratch_file = scratch_dir .. path_sep .. 'scratch.md'
+
+  -- Create the scratch directory if it doesn't exist
+  if vim.fn.isdirectory(scratch_dir) == 0 then
+    vim.fn.mkdir(scratch_dir, 'p')
+  end
+
+  -- Open the scratch file in a new buffer if it's not already open
+  if not scratch_buffer or not vim.api.nvim_buf_is_valid(scratch_buffer) then
+    vim.cmd('edit ' .. scratch_file)
+    scratch_buffer = vim.api.nvim_get_current_buf()
+
+    -- Set some buffer-local options
+    vim.bo[scratch_buffer].filetype = 'markdown'
+    vim.bo[scratch_buffer].bufhidden = 'hide'
+    vim.bo[scratch_buffer].swapfile = false
+
+    -- vim.cmd 'ZenMode'
+  else
+    vim.api.nvim_set_current_buf(scratch_buffer)
+    -- vim.cmd 'ZenMode'
+  end
+end
+
+local function toggle_scratch_buffer()
+  if vim.api.nvim_get_current_buf() == scratch_buffer then
+    if last_buffer and vim.api.nvim_buf_is_valid(last_buffer) then
+      vim.api.nvim_set_current_buf(last_buffer)
+    else
+      vim.cmd 'bnext'
+    end
+    -- vim.cmd 'ZenMode'
+  else
+    last_buffer = vim.api.nvim_get_current_buf()
+    open_scratch_buffer()
+  end
+end
+
+-- Set up the keybinding
+vim.keymap.set('n', '<leader>q', toggle_scratch_buffer, { desc = 'Toggle scratch pad' })

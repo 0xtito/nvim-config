@@ -23,20 +23,14 @@ return {
       direction = 'vertical',
     }
 
-    vim.keymap.set('n', '<leader>tv', function()
+    vim.keymap.set('n', '<leader>Tv', function()
       local sizeAsString = tostring(vim.o.columns * 0.35)
       tt.toggle(nil, nil, sizeAsString, 'vertical', nil)
     end, { desc = 'Toggle Terminal (Vertical)' })
 
-    vim.keymap.set('n', '<leader>th', function()
+    vim.keymap.set('n', '<leader>Th', function()
       tt.toggle(nil, nil, '15', 'horizontal', nil)
     end, { desc = 'Toggle Terminal (Horiztonal)' })
-
-    -- local filetype_commands = setmetatable({}, {
-    --   __index = function()
-    --     return "echo 'You need to set a command for this filetype'"
-    --   end,
-    -- })
 
     local function get_current_filetype()
       return vim.bo.filetype
@@ -60,9 +54,9 @@ return {
       end
     end
 
-    vim.keymap.set('n', '<leader>ts1', set_command(1), { desc = 'Terminal Set F9' })
-    vim.keymap.set('n', '<leader>ts2', set_command(2), { desc = 'Terminal Set F10' })
-    vim.keymap.set('n', '<leader>ts3', set_command(3), { desc = 'Terminal Set F11' })
+    vim.keymap.set('n', '<leader>Ts1', set_command(1), { desc = 'Terminal Set F9' })
+    vim.keymap.set('n', '<leader>Ts2', set_command(2), { desc = 'Terminal Set F10' })
+    vim.keymap.set('n', '<leader>Ts3', set_command(3), { desc = 'Terminal Set F11' })
 
     local function run_command(index)
       return function()
@@ -83,16 +77,6 @@ return {
     -- Function to cancel the currently running command
     local function cancel_command()
       tt.exec(string.char(3))
-
-      -- local terminals = tt.get_all()
-      -- for _, term in ipairs(terminals) do
-      --   if term.terminal and term.terminal.is_open then
-      --     term:send(string.char(3)) -- Send Ctrl-C
-      --     print 'Cancelled running command in terminal'
-      --     return
-      --   end
-      -- end
-      -- print 'No active terminal found'
     end
 
     -- Set keybinding for F12 to cancel the running command
