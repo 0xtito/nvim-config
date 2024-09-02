@@ -52,7 +52,7 @@ M.setup = function()
     dingllm.invoke_llm_and_stream_into_editor({
       url = 'https://api.anthropic.com/v1/messages',
       model = 'claude-3-5-sonnet-20240620',
-      api_key_name = 'ANTHROPIC_API_KEY',
+      api_key_name = 'ANTHROPIC_API_KEY_DINGLLM',
       system_prompt = helpful_prompt,
       replace = false,
     }, dingllm.make_anthropic_spec_curl_args, dingllm.handle_anthropic_spec_data)
@@ -62,7 +62,7 @@ M.setup = function()
     dingllm.invoke_llm_and_stream_into_editor({
       url = 'https://api.anthropic.com/v1/messages',
       model = 'claude-3-5-sonnet-20240620',
-      api_key_name = 'ANTHROPIC_API_KEY',
+      api_key_name = 'ANTHROPIC_API_KEY_DINGLLM',
       system_prompt = system_prompt,
       replace = true,
     }, dingllm.make_anthropic_spec_curl_args, dingllm.handle_anthropic_spec_data)

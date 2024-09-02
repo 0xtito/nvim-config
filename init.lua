@@ -1,4 +1,4 @@
---- Neovim configuration file ---
+--- Neovim configuration file ---:
 
 function _G.config_path(dir, ...)
   local sep = package.config:sub(1, 1)
@@ -10,8 +10,6 @@ end
 --  NOTE: Must happen before plugins are loaded (otherwise wrong leader will be used)
 vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
--- Cursor
--- vim.opt.guicursor = 'n-v-c:block-Cursor,i-ci-ve:ver25-CursorInsert'
 
 -- Set to true if you have a Nerd Font installed and selected in the terminal
 vim.g.have_nerd_font = true
@@ -185,7 +183,8 @@ vim.keymap.set('v', '<leader>RA', replace_highlighted(), { noremap = true, silen
 vim.keymap.set('n', '<' .. vim.g.SUPER .. '-k>', '<' .. vim.g.SUPER .. '-w>k', { silent = true, desc = 'Move to the split above' })
 vim.keymap.set('n', '<' .. vim.g.SUPER .. '-j>', '<' .. vim.g.SUPER .. '-w>j', { silent = true, desc = 'Move to the split below' })
 vim.keymap.set('n', '<' .. vim.g.SUPER .. '-h>', '<' .. vim.g.SUPER .. '-w>h', { silent = true, desc = 'Move to the split on the left' })
-vim.keymap.set('n', '<' .. vim.g.SUPER .. '-l>', '<' .. vim.g.SUPER .. '-w>l', { silent = true, desc = 'Move to the split on the right' })
+vim.keymap.set('n', '<' .. vim.g.SUPER .. '-l>', '<D-w>l', { silent = true, desc = 'Move to the split on the right' })
+-- change this so that the 3 arg is <C-w>[LETTER] instead of what it is now
 
 -- [[ Basic Keymaps ]]
 --  See `:help vim.keymap.set()`
@@ -682,9 +681,9 @@ require('lazy').setup({
             local server = servers[server_name] or {}
             local overrides = {}
 
-            if server_name == 'ruff' then
-              return
-            end
+            -- if server_name == 'ruff' then
+            --   return
+            -- end
 
             if server_name == 'clangd' then
               overrides.offsetEncoding = { 'utf-16' }
@@ -1154,11 +1153,8 @@ local function open_scratch_buffer()
     vim.bo[scratch_buffer].filetype = 'markdown'
     vim.bo[scratch_buffer].bufhidden = 'hide'
     vim.bo[scratch_buffer].swapfile = false
-
-    -- vim.cmd 'ZenMode'
   else
     vim.api.nvim_set_current_buf(scratch_buffer)
-    -- vim.cmd 'ZenMode'
   end
 end
 
