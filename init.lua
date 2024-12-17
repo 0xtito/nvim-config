@@ -10,8 +10,6 @@ end
 --  NOTE: Must happen before plugins are loaded (otherwise wrong leader will be used)
 vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
--- Cursor
--- vim.opt.guicursor = 'n-v-c:block-Cursor,i-ci-ve:ver25-CursorInsert'
 
 -- Set to true if you have a Nerd Font installed and selected in the terminal
 vim.g.have_nerd_font = true
@@ -55,6 +53,9 @@ end
 -- NOTE: You can change these options as you wish!
 --  For more options, you can see `:help option-list`
 
+-- vim.cmd.colorscheme 'vim'
+vim.o.termguicolors = false
+
 -- Make line numbers default
 vim.opt.number = true
 -- You can also add relative line numbers, to help with jumping.
@@ -70,7 +71,12 @@ vim.opt.showmode = false
 -- Sync clipboard between OS and Neovim.
 --  Remove this option if you want your OS clipboard to remain independent.
 --  See `:help 'clipboard'`
-vim.opt.clipboard = 'unnamedplus'
+vim.schedule(function()
+  -- if vim.fn.has 'clipboard' == 1 then
+  vim.opt.clipboard = 'unnamedplus'
+  -- end
+end)
+-- vim.opt.clipboard = 'unnamedplus'
 
 -- Enable break indent
 vim.opt.breakindent = true
@@ -114,8 +120,8 @@ vim.opt.cursorline = true
 vim.opt.scrolloff = 8
 
 -- Limit completions to 8 items at a time
--- vim.opt.pumheight = 12
--- vim.opt.pumwidth = 24
+-- vim.opt.pumheight = 8
+vim.opt.pumwidth = 24
 
 -- Removing swap file and backup file
 vim.opt.swapfile = false
@@ -249,9 +255,12 @@ vim.api.nvim_create_autocmd('TextYankPost', {
 -- [[ Install `lazy.nvim` plugin manager ]]
 --    See `:help lazy.nvim.txt` or https://github.com/folke/lazy.nvim for more info
 local lazypath = vim.fn.stdpath 'data' .. '/lazy/lazy.nvim'
-if not vim.loop.fs_stat(lazypath) then
+if not (vim.uv or vim.loop).fs_stat(lazypath) then
   local lazyrepo = 'https://github.com/folke/lazy.nvim.git'
-  vim.fn.system { 'git', 'clone', '--filter=blob:none', '--branch=stable', lazyrepo, lazypath }
+  local out = vim.fn.system { 'git', 'clone', '--filter=blob:none', '--branch=stable', lazyrepo, lazypath }
+  if vim.v.shell_error ~= 0 then
+    error('Error cloning lazy.nvim:\n' .. out)
+  end
 end ---@diagnostic disable-next-line: undefined-field
 vim.opt.rtp:prepend(lazypath)
 
@@ -278,9 +287,6 @@ require('lazy').setup({
   --
   --  This is equivalent to:
   --    require('Comment').setup({})
-
-  -- "gc" to comment visual regions/lines
-  { 'numToStr/Comment.nvim', opts = {} },
 
   -- Here is a more advanced example where we pass configuration
   -- options to `gitsigns.nvim`. This is equivalent to the following Lua:
@@ -318,30 +324,55 @@ require('lazy').setup({
   { -- Useful plugin to show you pending keybinds.
     'folke/which-key.nvim',
     event = 'VimEnter', -- Sets the loading event to 'VimEnter'
-    config = function() -- This is the function that runs, AFTER loading
-      require('which-key').setup()
+    opts = {
+      mappings = vim.g.have_nerd_font,
 
-      -- Document existing key chains
-      require('which-key').register {
-        ['<leader>c'] = { name = '[C]ode', _ = 'which_key_ignore' },
-        ['<leader>d'] = { name = '[D]ocument', _ = 'which_key_ignore' },
-        ['<leader>r'] = { name = '[R]ename', _ = 'which_key_ignore' },
-        ['<leader>s'] = { name = '[s]earch', _ = 'which_key_ignore' },
-        ['<leader>S'] = { name = 'Trouble [S]ymbols', _ = 'which_key_ignore' },
-        ['<leader>w'] = { name = '[W]orkspace', _ = 'which_key_ignore' },
-        ['<leader>t'] = { name = '[t]rouble', _ = 'which_key_ignore' },
-        ['<leader>gh'] = { name = '[G]it [H]unk', _ = 'which_key_ignore' },
-        ['<leader>h'] = { name = '[H]arpoon', _ = 'which_key_ignore' },
-        ['<leader>a'] = { name = '[A]I', _ = 'which_key_ignore' },
-        ['<leader>z'] = { name = '[Z]en Mode', _ = 'which_key_ignore' },
-        ['<leader>o'] = { name = '[O]pen Scratch Pad', _ = 'which_key_ignore' },
-        ['<leader>T'] = { name = '[T]oggleterm', _ = 'which_key_ignore' },
-      }
-      -- visual mode
-      require('which-key').register({
-        ['<leader>gh'] = { '[G]it [H]unk' },
-      }, { mode = 'v' })
-    end,
+      keys = vim.g.have_nerd_font and {} or {
+        Up = '<Up> ',
+        Down = '<Down> ',
+        Left = '<Left> ',
+        Right = '<Right> ',
+        C = '<C-…> ',
+        M = '<M-…> ',
+        D = '<D-…> ',
+        S = '<S-…> ',
+        CR = '<CR> ',
+        Esc = '<Esc> ',
+        ScrollWheelDown = '<ScrollWheelDown> ',
+        ScrollWheelUp = '<ScrollWheelUp> ',
+        NL = '<NL> ',
+        BS = '<BS> ',
+        Space = '<Space> ',
+        Tab = '<Tab> ',
+        F1 = '<F1>',
+        F2 = '<F2>',
+        F3 = '<F3>',
+        F4 = '<F4>',
+        F5 = '<F5>',
+        F6 = '<F6>',
+        F7 = '<F7>',
+        F8 = '<F8>',
+        F9 = '<F9>',
+        F10 = '<F10>',
+        F11 = '<F11>',
+        F12 = '<F12>',
+      },
+    },
+
+    spec = {
+      { '<leader>c', group = '[C]ode', mode = { 'n', 'x' } },
+      { '<leader>d', group = '[D]ocument' },
+      { '<leader>r', group = '[R]ename' },
+      { '<leader>s', group = '[S]earch' },
+      { '<leader>w', group = '[W]orkspace' },
+      { '<leader>t', group = '[T]oggle' },
+      { '<leader>gh', group = '[G]it [H]unk', mode = { 'n', 'v' } },
+      { '<leader>h', group = '[H]arpoon', mode = { 'n' } },
+      { '<leader>a', group = '[A]I', mode = { 'n' } },
+      { '<leader>z', group = '[Z]en Mode', mode = { 'n' } },
+      { '<leader>o', group = '[O]pen Scratch Pad', mode = { 'n' } },
+      { '<leader>T', group = '[T]oggleterm', mode = { 'n' } },
+    },
   },
 
   -- NOTE: Plugins can specify dependencies.
@@ -462,6 +493,20 @@ require('lazy').setup({
       end, { desc = '[S]earch [N]eovim files' })
     end,
   },
+  -- LSP Plugins
+  {
+    -- `lazydev` configures Lua LSP for your Neovim config, runtime and plugins
+    -- used for completion, annotations and signatures of Neovim apis
+    'folke/lazydev.nvim',
+    ft = 'lua',
+    opts = {
+      library = {
+        -- Load luvit types when the `vim.uv` word is found
+        { path = 'luvit-meta/library', words = { 'vim%.uv' } },
+      },
+    },
+  },
+  { 'Bilal2453/luvit-meta', lazy = true },
 
   { -- LSP Configuration & Plugins
     'neovim/nvim-lspconfig',
@@ -475,9 +520,11 @@ require('lazy').setup({
       -- NOTE: `opts = {}` is the same as calling `require('fidget').setup({})`
       { 'j-hui/fidget.nvim', opts = {} },
 
+      'hrsh7th/cmp-nvim-lsp', -- Autocompletion plugin
+
       -- `neodev` configures Lua LSP for your Neovim config, runtime and plugins
       -- used for completion, annotations and signatures of Neovim apis
-      { 'folke/neodev.nvim', opts = {} },
+      -- { 'folke/neodev.nvim', opts = {} },
     },
     config = function()
       -- Brief aside: **What is LSP?**
@@ -519,8 +566,9 @@ require('lazy').setup({
           --
           -- In this case, we create a function that lets us more easily define mappings specific
           -- for LSP related items. It sets the mode, buffer and description for us each time.
-          local map = function(keys, func, desc)
-            vim.keymap.set('n', keys, func, { buffer = event.buf, desc = 'LSP: ' .. desc })
+          local map = function(keys, func, desc, mode)
+            mode = mode or 'n'
+            vim.keymap.set(mode, keys, func, { buffer = event.buf, desc = 'LSP: ' .. desc })
           end
 
           local builtin = require 'telescope.builtin'
@@ -569,15 +617,26 @@ require('lazy').setup({
           --
           -- When you move your cursor, the highlights will be cleared (the second autocommand).
           local client = vim.lsp.get_client_by_id(event.data.client_id)
-          if client and client.server_capabilities.documentHighlightProvider then
+          if client and client.supports_method(vim.lsp.protocol.Methods.textDocument_documentHighlight) then
+            local highlight_augroup = vim.api.nvim_create_augroup('kickstart-lsp-highlight', { clear = false })
             vim.api.nvim_create_autocmd({ 'CursorHold', 'CursorHoldI' }, {
               buffer = event.buf,
+              group = highlight_augroup,
               callback = vim.lsp.buf.document_highlight,
             })
 
             vim.api.nvim_create_autocmd({ 'CursorMoved', 'CursorMovedI' }, {
               buffer = event.buf,
+              group = highlight_augroup,
               callback = vim.lsp.buf.clear_references,
+            })
+
+            vim.api.nvim_create_autocmd('LspDetach', {
+              group = vim.api.nvim_create_augroup('kickstart-lsp-detach', { clear = true }),
+              callback = function(event2)
+                vim.lsp.buf.clear_references()
+                vim.api.nvim_clear_autocmds { group = 'kickstart-lsp-highlight', buffer = event2.buf }
+              end,
             })
           end
 
@@ -585,9 +644,9 @@ require('lazy').setup({
           -- code, if the language server you are using supports them
           --
           -- This may be unwanted, since they displace some of your code
-          if client and client.server_capabilities.inlayHintProvider and vim.lsp.inlay_hint then
+          if client and client.supports_method(vim.lsp.protocol.Methods.textDocument_inlayHint) then
             map('<leader>th', function()
-              vim.lsp.inlay_hint.enable(0, not vim.lsp.inlay_hint.is_enabled())
+              vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled { bufnr = event.buf })
             end, '[T]oggle Inlay [H]ints')
           end
         end,
@@ -600,6 +659,22 @@ require('lazy').setup({
       local capabilities = vim.lsp.protocol.make_client_capabilities()
       capabilities = vim.tbl_deep_extend('force', capabilities, require('cmp_nvim_lsp').default_capabilities())
 
+      local get_python_path = function()
+        local cur_py_path = vim.fn.system('which python'):gsub('\n', '')
+
+        local in_conda = vim.fn.system('echo $CONDA_DEFAULT_ENV'):gsub('\n', '') ~= ''
+
+        if in_conda and string.match(cur_py_path, 'OH%-main') then
+          local py_version = vim.fn.system('python --version'):gsub('\n', ''):match ' (.+)'
+          local po = vim.fn.system('poetry env use ' .. py_version):gsub('\n', '')
+          local python_path = po:match(':(.+)$'):gsub('%s+', '')
+          return python_path .. '/bin/python'
+        end
+
+        -- If no Python found, fall back to system Python
+        return vim.fn.exepath 'python3' or vim.fn.exepath 'python' or 'python'
+      end
+
       -- Enable the following language servers
       --  Feel free to add/remove any LSPs that you want here. They will automatically be installed.
       --
@@ -609,55 +684,46 @@ require('lazy').setup({
       --  - capabilities (table): Override fields in capabilities. Can be used to disable certain LSP features.
       --  - settings (table): Override the default settings passed when initializing the server.
       --        For example, to see the options for `lua_ls`, you could go to: https://luals.github.io/wiki/settings/
-      local servers = {
-        -- clangd = {},
-        -- gopls = {},
-        -- pyright = {},
-        -- rust_analyzer = {},
-        -- ... etc. See `:help lspconfig-all` for a list of all the pre-configured LSPs
-        --
-        -- Some languages (like typescript) have entire language plugins that can be useful:
-        --    https://github.com/pmizio/typescript-tools.nvim
-        --
-        -- But for many setups, the LSP (`tsserver`) will work just fine
-        -- tsserver = {
-        --   filetypes = { 'typescript', 'typescriptreact', 'typescript.tsx' },
-        -- },
-        --
-
-        -- clangd = {
-        --   capabilities = {
-        --     offsetencoding = { 'utf-16' },
-        --   },
-        -- },
-
-        -- Adding locally built zls to lspconfig
-        -- zls = {
-        --   cmd = { 'zls' },
-        --   filetypes = { 'zig' },
-        -- settings = {},
-        -- },
-        lua_ls = {
-          -- cmd = {...},
-          -- filetypes = { ...},
-          -- capabilities = {},
-          settings = {
-            Lua = {
-              completion = {
-                callSnippet = 'Replace',
+      local servers =
+        {
+          -- clangd = {},
+          -- gopls = {},
+          pyright = {
+            settings = {
+              pyright = {
+                disableOrganizeImports = true, -- Using Ruff
               },
-              -- You can toggle below to ignore Lua_LS's noisy `missing-fields` warnings
-              -- diagnostics = { disable = { 'missing-fields' } },
+              python = {
+                analysis = {
+                  -- Ignore all files for analysis to exclusively use Ruff for linting
+                  -- ignore = { '*' },
+                  typeCheckingMode = 'off', -- Using mypy
+                },
+                pythonPath = get_python_path(),
+              },
+            },
+          },
+
+          lua_ls = {
+            -- cmd = {...},
+            -- filetypes = { ...},
+            -- capabilities = {},
+            settings = {
+              Lua = {
+                completion = {
+                  callSnippet = 'Replace',
+                },
+                -- You can toggle below to ignore Lua_LS's noisy `missing-fields` warnings
+                -- diagnostics = { disable = { 'missing-fields' } },
+              },
             },
           },
         },
-      }
-
-      -- Integrating zls with lspconfig, outside of Mason
-      require('lspconfig').zls.setup {
-        cmd = { 'zls' },
-        filetypes = { 'zig', 'zon' },
-      }
+        -- Integrating zls with lspconfig, outside of Mason
+        require('lspconfig').zls.setup {
+          cmd = { 'zls' },
+          filetypes = { 'zig', 'zon' },
+        }
 
       -- Ensure the servers and tools above are installed
       --  To check the current status of installed tools and/or manually install
@@ -682,24 +748,21 @@ require('lazy').setup({
             local server = servers[server_name] or {}
             local overrides = {}
 
-            if server_name == 'ruff' then
-              return
-            end
-
             if server_name == 'clangd' then
               overrides.offsetEncoding = { 'utf-16' }
             end
 
-            if server_name == 'ruff_lsp' then
-              ---@diagnostic disable-next-line: unused-local
-              local on_attach = function(client, bufnr)
-                if client.name == 'ruff_lsp' then
-                  -- Disable hover in favor of Pyright
-                  client.server_capabilities.hoverProvider = false
+            if server_name == 'pylsp' then
+              server.on_init = function(client)
+                local root_dir = client.workspace_folders and client.workspace_folders[1] and client.workspace_folders[1].name
+                if root_dir then
+                  local pyproject_toml = root_dir .. '/pyproject.toml'
+                  if vim.fn.filereadable(pyproject_toml) == 1 then
+                    client.config.settings.pylsp.configurationSources = { 'pyproject' }
+                  end
                 end
+                return true
               end
-
-              server.on_attach = on_attach
             end
 
             -- This handles overriding only values explicitly passed
@@ -747,15 +810,16 @@ require('lazy').setup({
 
   { -- Autoformat
     'stevearc/conform.nvim',
-    lazy = false,
+    event = { 'BufWritePre' },
+    cmd = { 'ConformInfo' },
     keys = {
       {
         '<leader>fb',
         function()
-          require('conform').format { async = true, lsp_fallback = true }
+          require('conform').format { async = true, lsp_format = 'fallback' }
         end,
         mode = '',
-        desc = '[F]ormat [B]uffer',
+        desc = '[F]ormat [b]uffer',
       },
     },
     opts = {
@@ -764,20 +828,26 @@ require('lazy').setup({
         -- Disable "format_on_save lsp_fallback" for languages that don't
         -- have a well standardized coding style. You can add additional
         -- languages here or re-enable it for the disabled ones.
-        local disable_filetypes = { c = true, cpp = true, objc = true, gdscript = false, lua = false }
+        local disable_filetypes = { c = true, cpp = true, objc = true, gdscript = false, lua = false, python = true }
+        local lsp_format_opt
+        if disable_filetypes[vim.bo[bufnr].filetype] then
+          lsp_format_opt = 'never'
+        else
+          lsp_format_opt = 'fallback'
+        end
         return {
           timeout_ms = 500,
-          lsp_fallback = not disable_filetypes[vim.bo[bufnr].filetype],
+          lsp_format = lsp_format_opt,
         }
       end,
       formatters_by_ft = {
         lua = { 'stylua' },
         -- Conform can also run multiple formatters sequentially
-        -- python = { "isort", "black" },
-        --
+
         -- You can use a sub-list to tell conform to run *until* a formatter
         -- is found.
         javascript = { { 'prettierd', 'prettier' } },
+        javascriptreact = { { 'prettierd', 'prettier' } },
         typescript = { { 'prettierd', 'prettier' } },
         typescriptreact = { { 'prettierd', 'prettier' } },
         cpp = { 'clang-format' },
@@ -832,7 +902,7 @@ require('lazy').setup({
       -- See `:help cmp`
       local cmp = require 'cmp'
       local luasnip = require 'luasnip'
-      local lspkind = require 'lspkind'
+      -- local lspkind = require 'lspkind'
       luasnip.config.setup {}
 
       cmp.setup {
@@ -842,43 +912,7 @@ require('lazy').setup({
             -- vim.fn['vsnip#anonymous'](args.body)
           end,
         },
-        formatting = {
-          format = lspkind.cmp_format {
-            with_text = true,
-            menu = {
-              nvim_lsp = '[LSP]',
-              luasnip = '[LuaSnip]',
-              buffer = '[Buffer]',
-              path = '[Path]',
-            },
-            maxwidth = function()
-              return math.floor(0.45 * vim.o.columns)
-            end,
-            ellipsis_char = '...',
-            show_labelDetails = false,
-          },
-          -- format = function(entry, vim_item)
-          --   vim_item.kind = require('lspkind').presets.default[vim_item.kind] .. ' ' .. vim_item.kind
-          --   vim_item.menu = ({
-          --     nvim_lsp = '[LSP]',
-          --     luasnip = '[LuaSnip]',
-          --     buffer = '[Buffer]',
-          --     path = '[Path]',
-          --   })[entry.source.name]
-          --   return vim_item
-          -- end,
-          fields = { 'abbr', 'kind', 'menu' },
-          expandable_indicator = true,
-        },
         completion = { completeopt = 'menu,menuone,noinsert' },
-        -- window = {
-        --
-        --   documentation = {
-        --     border = 'rounded',
-        --     winhighlight = 'NormalFloat:NormalFloat,FloatBorder:NormalFloat',
-        --     zindex = 50,
-        --   },
-        -- },
 
         -- For an understanding of why these mappings were
         -- chosen, you will need to read `:help ins-completion`
@@ -903,10 +937,6 @@ require('lazy').setup({
           --  Generally you don't need this, because nvim-cmp will display
           --  completions whenever it has completion options available.
           ['<C-Space>'] = cmp.mapping.complete {},
-          -- Doing this because I am remapping iTerm2, and want
-          -- to avoid MacOS keybind conflicts.
-          -- ['<D-s>'] = cmp.mapping.complete {},
-          -- ['<C-c>'] = cmp.mapping.complete(),
 
           -- Think of <c-l> as moving to the right of your snippet expansion.
           --  So if you have a snippet that's like:
@@ -932,6 +962,11 @@ require('lazy').setup({
         },
 
         sources = {
+          {
+            name = 'lazydev',
+            -- set group index to 0 to skip loading LuaLS completions as lazydev recommends it
+            group_index = 0,
+          },
           { name = 'nvim_lsp' },
           { name = 'luasnip' },
           { name = 'path' },
@@ -939,24 +974,6 @@ require('lazy').setup({
       }
     end,
   },
-
-  -- { -- You can easily change to a different colorscheme.
-  --   -- Change the name of the colorscheme plugin below, and then
-  --   -- change the command in the config to whatever the name of that colorscheme is.
-  --   --
-  --   -- If you want to see what colorschemes are already installed, you can use `:Telescope colorscheme`.
-  --   'folke/tokyonight.nvim',
-  --   priority = 1000, -- Make sure to load this before all the other start plugins.
-  --   init = function()
-  --     -- Load the colorscheme here.
-  --     -- Like many other themes, this one has different styles, and you could load
-  --     -- any other, such as 'tokyonight-storm', 'tokyonight-moon', or 'tokyonight-day'.
-  --     vim.cmd.colorscheme 'tokyonight-night'
-  --
-  --     -- You can configure highlights by doing something like:
-  --     vim.cmd.hi 'Comment gui=none'
-  --   end,
-  -- },
 
   -- Highlight todo, notes, etc in comments
   { 'folke/todo-comments.nvim', event = 'VimEnter', dependencies = { 'nvim-lua/plenary.nvim' }, opts = { signs = false } },
@@ -1016,6 +1033,7 @@ require('lazy').setup({
         'javascript',
         'typescript',
         'rust',
+        'python',
       },
       -- Autoinstall languages that are not installed
       auto_install = true,
@@ -1028,21 +1046,12 @@ require('lazy').setup({
       },
       indent = { enable = true, disable = { 'ruby' } },
     },
-    config = function(_, opts)
-      -- [[ Configure Treesitter ]] See `:help nvim-treesitter`
-
-      -- Prefer git instead of curl in order to improve connectivity in some environments
-      require('nvim-treesitter.install').prefer_git = true
-      ---@diagnostic disable-next-line: missing-fields
-      require('nvim-treesitter.configs').setup(opts)
-
-      -- There are additional nvim-treesitter modules that you can use to interact
-      -- with nvim-treesitter. You should go explore a few and see what interests you:
-      --
-      --    - Incremental selection: Included, see `:help nvim-treesitter-incremental-selection-mod`
-      --    - Show your current context: https://github.com/nvim-treesitter/nvim-treesitter-context
-      --    - Treesitter + textobjects: https://github.com/nvim-treesitter/nvim-treesitter-textobjects
-    end,
+    -- There are additional nvim-treesitter modules that you can use to interact
+    -- with nvim-treesitter. You should go explore a few and see what interests you:
+    --
+    --    - Incremental selection: Included, see `:help nvim-treesitter-incremental-selection-mod`
+    --    - Show your current context: https://github.com/nvim-treesitter/nvim-treesitter-context
+    --    - Treesitter + textobjects: https://github.com/nvim-treesitter/nvim-treesitter-textobjects
   },
 
   require 'kickstart.plugins.debug',
@@ -1058,6 +1067,65 @@ require('lazy').setup({
   --  Uncomment the following line and add your plugins to `lua/custom/plugins/*.lua` to get going.
   --    For additional information, see `:help lazy.nvim-lazy.nvim-structuring-your-plugins`
   { import = 'custom.plugins' },
+
+  {
+    'yetone/avante.nvim',
+    event = 'VeryLazy',
+    lazy = false,
+    enabled = function()
+      return vim.env.AVANTE_API_KEY ~= nil
+    end,
+    version = true, -- set this if you want to always pull the latest change
+    opts = {
+      -- add any opts here
+      provider = 'claude',
+      auto_suggestions_provider = 'copilot',
+      openai = {
+        endpoint = 'https://api.openai.com/v1',
+        model = 'o1-mini',
+        timeout = 30000, -- Timeout in milliseconds
+        temperature = 0,
+        max_tokens = 4096,
+        ['local'] = false,
+      },
+    },
+    -- if you want to build from source then do `make BUILD_FROM_SOURCE=true`
+    build = 'make',
+    -- build = "powershell -ExecutionPolicy Bypass -File Build.ps1 -BuildFromSource false" -- for windows
+    dependencies = {
+      'stevearc/dressing.nvim',
+      'nvim-lua/plenary.nvim',
+      'MunifTanjim/nui.nvim',
+      --- The below dependencies are optional,
+      'nvim-tree/nvim-web-devicons', -- or echasnovski/mini.icons
+      'zbirenbaum/copilot.lua', -- for providers='copilot'
+      {
+        -- support for image pasting
+        'HakonHarnes/img-clip.nvim',
+        event = 'VeryLazy',
+        opts = {
+          -- recommended settings
+          default = {
+            embed_image_as_base64 = false,
+            prompt_for_file_name = false,
+            drag_and_drop = {
+              insert_mode = true,
+            },
+            -- required for Windows users
+            use_absolute_path = true,
+          },
+        },
+      },
+      {
+        -- Make sure to set this up properly if you have lazy=true
+        'MeanderingProgrammer/render-markdown.nvim',
+        opts = {
+          file_types = { 'markdown', 'Avante' },
+        },
+        ft = { 'markdown', 'Avante' },
+      },
+    },
+  },
 }, {
   ui = {
     -- If you are using a Nerd Font: set icons to an empty table which will use the
@@ -1178,3 +1246,14 @@ end
 
 -- Set up the keybinding
 vim.keymap.set('n', '<leader>q', toggle_scratch_buffer, { desc = 'Toggle scratch pad' })
+
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = 'zig',
+  callback = function()
+    vim.bo.textwidth = 100
+    -- vim.opt.colorcolumn = '100'
+  end,
+})
+
+-- Set up mapping for avante.nvim
+vim.api.nvim_set_keymap('n', '<leader>at', ':AvanteToggle<CR>', { noremap = true, silent = true })
