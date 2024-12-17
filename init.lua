@@ -120,8 +120,8 @@ vim.opt.cursorline = true
 vim.opt.scrolloff = 8
 
 -- Limit completions to 8 items at a time
--- vim.opt.pumheight = 12
--- vim.opt.pumwidth = 24
+-- vim.opt.pumheight = 8
+vim.opt.pumwidth = 24
 
 -- Removing swap file and backup file
 vim.opt.swapfile = false
@@ -704,21 +704,6 @@ require('lazy').setup({
             },
           },
 
-          ruff_lsp = {
-            on_attach = function(client, bufnr)
-              if client.name == 'ruff_lsp' then
-                -- Disable hover in favor of Pyright
-                client.server_capabilities.hoverProvider = false
-
-                client.server_capabilities.documentFormattingProvider = true
-                client.server_capabilities.documentRangeFormattingProvider = false
-              end
-            end,
-            init_options = {
-              args = { '--ignore', 'E501 ' },
-            },
-          },
-
           lua_ls = {
             -- cmd = {...},
             -- filetypes = { ...},
@@ -862,6 +847,7 @@ require('lazy').setup({
         -- You can use a sub-list to tell conform to run *until* a formatter
         -- is found.
         javascript = { { 'prettierd', 'prettier' } },
+        javascriptreact = { { 'prettierd', 'prettier' } },
         typescript = { { 'prettierd', 'prettier' } },
         typescriptreact = { { 'prettierd', 'prettier' } },
         cpp = { 'clang-format' },
@@ -1086,6 +1072,9 @@ require('lazy').setup({
     'yetone/avante.nvim',
     event = 'VeryLazy',
     lazy = false,
+    enabled = function()
+      return vim.env.AVANTE_API_KEY ~= nil
+    end,
     version = true, -- set this if you want to always pull the latest change
     opts = {
       -- add any opts here

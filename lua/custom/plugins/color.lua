@@ -47,7 +47,10 @@ return {
       -- ColorMyPencils()
       vim.cmd.hi 'Visual ctermfg=none ctermbg=242'
 
-      require('avante_lib').load()
+      -- Only load avante_lib if AVANTE_API_KEY is set
+      if vim.env.AVANTE_API_KEY then
+        require('avante_lib').load()
+      end
     end,
   },
 }
