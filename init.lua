@@ -659,6 +659,7 @@ require('lazy').setup({
       local capabilities = vim.lsp.protocol.make_client_capabilities()
       capabilities = vim.tbl_deep_extend('force', capabilities, require('cmp_nvim_lsp').default_capabilities())
 
+      -- Find the pythonPath for the current environment
       local get_python_path = function()
         local cur_py_path = vim.fn.system('which python'):gsub('\n', '')
 
@@ -702,6 +703,19 @@ require('lazy').setup({
                 pythonPath = get_python_path(),
               },
             },
+            on_init = function(client)
+              -- Check for pyrightconfig.json at the project root
+              local root_dir = client.config.root_dir
+              if root_dir then
+                local pyright_config = root_dir .. '/pyrightconfig.json'
+                if vim.fn.filereadable(pyright_config) == 1 then
+                  -- Log that we found the config file
+                  vim.notify('Pyright: Found configuration at ' .. pyright_config, vim.log.levels.INFO)
+                  -- Pyright will automatically use the config file, no additional setup needed
+                end
+              end
+              return true
+            end,
           },
 
           lua_ls = {
@@ -738,6 +752,7 @@ require('lazy').setup({
       local ensure_installed = vim.tbl_keys(servers or {})
       vim.list_extend(ensure_installed, {
         'stylua', -- Used to format Lua code
+        'pyright', -- Explicitly ensure Pyright is installed
         -- 'gdtoolkit',
       })
       require('mason-tool-installer').setup { ensure_installed = ensure_installed }
@@ -816,7 +831,7 @@ require('lazy').setup({
       {
         '<leader>fb',
         function()
-          require('conform').format { async = true, lsp_format = 'fallback' }
+          require('conform').format { async = true }
         end,
         mode = '',
         desc = '[F]ormat [b]uffer',
@@ -824,6 +839,10 @@ require('lazy').setup({
     },
     opts = {
       notify_on_error = false,
+      -- Set default options
+      default_format_opts = {
+        lsp_format = 'fallback',
+      },
       format_on_save = function(bufnr)
         -- Disable "format_on_save lsp_fallback" for languages that don't
         -- have a well standardized coding style. You can add additional
@@ -846,15 +865,15 @@ require('lazy').setup({
 
         -- You can use a sub-list to tell conform to run *until* a formatter
         -- is found.
-        javascript = { { 'prettierd', 'prettier' } },
-        javascriptreact = { { 'prettierd', 'prettier' } },
-        typescript = { { 'prettierd', 'prettier' } },
-        typescriptreact = { { 'prettierd', 'prettier' } },
+        javascript = { 'prettierd', 'prettier', stop_after_first = true, prefer_local = 'node_modules/.bin' },
+        javascriptreact = { 'prettierd', 'prettier', stop_after_first = true, prefer_local = 'node_modules/.bin' },
+        typescript = { 'prettierd', 'prettier', stop_after_first = true, prefer_local = 'node_modules/.bin' },
+        typescriptreact = { 'prettierd', 'prettier', stop_after_first = true, prefer_local = 'node_modules/.bin' },
         cpp = { 'clang-format' },
-        json = { 'prettierd' },
+        json = { 'prettierd', stop_after_first = true, prefer_local = 'node_modules/.bin' },
         -- c = { 'clang-format' },
         gdscript = { 'gdtoolkit' },
-        markdown = { 'prettier', 'prettierd' },
+        markdown = { 'prettierd', stop_after_first = true, prefer_local = 'node_modules/.bin' },
       },
     },
   },
@@ -1061,33 +1080,24 @@ require('lazy').setup({
   -- require 'kickstart.plugins.neo-tree',
   require 'kickstart.plugins.gitsigns', -- adds gitsigns recommend keymaps
 
-  -- NOTE: The import below can automatically add your own plugins, configuration, etc from `lua/custom/plugins/*.lua`
-  --    This is the easiest way to modularize your config.
   --
   --  Uncomment the following line and add your plugins to `lua/custom/plugins/*.lua` to get going.
   --    For additional information, see `:help lazy.nvim-lazy.nvim-structuring-your-plugins`
   { import = 'custom.plugins' },
+  {
+    'nvzone/typr',
+    dependencies = 'nvzone/volt',
+    opts = {},
+    cmd = { 'Typr', 'TyprStats' },
+  },
 
   {
     'yetone/avante.nvim',
     event = 'VeryLazy',
     lazy = false,
-    enabled = function()
-      return vim.env.AVANTE_API_KEY ~= nil
-    end,
-    version = true, -- set this if you want to always pull the latest change
+    version = false, -- Set this to "*" to always pull the latest release version, or set it to false to update to the latest code changes.
     opts = {
       -- add any opts here
-      provider = 'claude',
-      auto_suggestions_provider = 'copilot',
-      openai = {
-        endpoint = 'https://api.openai.com/v1',
-        model = 'o1-mini',
-        timeout = 30000, -- Timeout in milliseconds
-        temperature = 0,
-        max_tokens = 4096,
-        ['local'] = false,
-      },
     },
     -- if you want to build from source then do `make BUILD_FROM_SOURCE=true`
     build = 'make',
@@ -1097,6 +1107,10 @@ require('lazy').setup({
       'nvim-lua/plenary.nvim',
       'MunifTanjim/nui.nvim',
       --- The below dependencies are optional,
+      'echasnovski/mini.pick', -- for file_selector provider mini.pick
+      'nvim-telescope/telescope.nvim', -- for file_selector provider telescope
+      'hrsh7th/nvim-cmp', -- autocompletion for avante commands and mentions
+      'ibhagwan/fzf-lua', -- for file_selector provider fzf
       'nvim-tree/nvim-web-devicons', -- or echasnovski/mini.icons
       'zbirenbaum/copilot.lua', -- for providers='copilot'
       {
