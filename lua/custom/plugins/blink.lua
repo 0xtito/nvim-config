@@ -12,6 +12,7 @@ return {
         nerd_font_variant = 'mono',
       },
       sources = {
+        -- default = { 'jupynium', 'lsp', 'path', 'snippets', 'buffer', 'copilot' },
         default = { 'lsp', 'path', 'snippets', 'buffer', 'copilot' },
         per_filetype = {
           sql = { 'snippets', 'dadbod', 'buffer' },
@@ -24,6 +25,12 @@ return {
             score_offset = 100,
             async = true,
           },
+          -- jupynium = {
+          --   name = 'Jupynium',
+          --   module = 'jupynium.blink_cmp',
+          --   -- Consider higher priority than LSP
+          --   score_offset = 1000,
+          -- },
         },
       },
       completion = {

@@ -27,6 +27,11 @@ return {
         desc = 'Diagnostics (Trouble)',
       },
       {
+        '<leader>te',
+        '<cmd>Trouble diagnostics filter.severity=vim.diagnostic.severity.ERROR<cr>',
+        desc = 'Error Diagnostics (Trouble)',
+      },
+      {
         '<leader>tX',
         '<cmd>Trouble diagnostics toggle filter.buf=0<cr>',
         desc = 'Buffer Diagnostics (Trouble)',

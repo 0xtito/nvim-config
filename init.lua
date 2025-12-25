@@ -451,6 +451,8 @@ require('lazy').setup({
       vim.keymap.set('n', '<leader>sd', builtin.diagnostics, { desc = '[S]earch [D]iagnostics' })
       vim.keymap.set('n', '<leader>sR', builtin.resume, { desc = '[S]earch [R]esume' })
 
+      vim.keymap.set('n', '<leader>sT', ':TodoTelescope<CR>', { desc = '[S]earch [T]odos' })
+
       vim.keymap.set('n', '<leader>sr', function()
         builtin.lsp_references {
           layout_strategy = 'vertical',
@@ -629,6 +631,13 @@ require('lazy').setup({
           --
           -- When you move your cursor, the highlights will be cleared (the second autocommand).
           local client = vim.lsp.get_client_by_id(event.data.client_id)
+
+          -- Disable formatting for jsonls - we use prettier instead
+          if client and client.name == 'jsonls' then
+            client.server_capabilities.documentFormattingProvider = false
+            client.server_capabilities.documentRangeFormattingProvider = false
+          end
+
           if client and client.supports_method(vim.lsp.protocol.Methods.textDocument_documentHighlight) then
             local highlight_augroup = vim.api.nvim_create_augroup('kickstart-lsp-highlight', { clear = false })
             vim.api.nvim_create_autocmd({ 'CursorHold', 'CursorHoldI' }, {
@@ -719,9 +728,9 @@ require('lazy').setup({
           clangd = {
             filetypes = { 'c', 'cpp', 'objc', 'objcpp', 'cuda' },
           },
-          protols = {
-            file_types = { 'proto' },
-          },
+          -- protols = {
+          --   filetypes = { 'proto' },
+          -- },
           -- gopls = {},
           pyright = {
             settings = {
@@ -773,7 +782,7 @@ require('lazy').setup({
           filetypes = { 'zig', 'zon' },
         }
 
-      require('lspconfig').protols.setup {}
+      -- require('lspconfig').protols.setup {}
 
       -- Ensure the servers and tools above are installed
       --  To check the current status of installed tools and/or manually install
@@ -789,7 +798,6 @@ require('lazy').setup({
       vim.list_extend(ensure_installed, {
         'stylua', -- Used to format Lua code
         'pyright', -- Explicitly ensure Pyright is installed
-        -- 'gdtoolkit',
       })
       require('mason-tool-installer').setup { ensure_installed = ensure_installed }
 
@@ -814,6 +822,10 @@ require('lazy').setup({
                 end
                 return true
               end
+            end
+
+            server.on_attach = function(client, bufnr)
+              require('workspace-diagnostics').populate_workspace_diagnostics(client, bufnr) -- Populate Workspace-Diagnostics plugin information.
             end
 
             -- This handles overriding only values explicitly passed
@@ -880,10 +892,7 @@ require('lazy').setup({
         lsp_format = 'fallback',
       },
       format_on_save = function(bufnr)
-        -- Disable "format_on_save lsp_fallback" for languages that don't
-        -- have a well standardized coding style. You can add additional
-        -- languages here or re-enable it for the disabled ones.
-        local disable_filetypes = { c = true, cpp = true, objc = true, gdscript = false, lua = false, python = true }
+        local disable_filetypes = { c = true, cpp = true, objc = true, gdscript = false, lua = false, python = true, json = true, jsonc = true }
         local lsp_format_opt
         if disable_filetypes[vim.bo[bufnr].filetype] then
           lsp_format_opt = 'never'
@@ -891,7 +900,7 @@ require('lazy').setup({
           lsp_format_opt = 'fallback'
         end
         return {
-          timeout_ms = 500,
+          timeout_ms = 3000, -- Changed from 2000 to 3000 for monorepo overhead
           lsp_format = lsp_format_opt,
         }
       end,
@@ -901,15 +910,25 @@ require('lazy').setup({
 
         -- You can use a sub-list to tell conform to run *until* a formatter
         -- is found.
-        javascript = { 'prettierd', 'prettier', stop_after_first = true, prefer_local = 'node_modules/.bin' },
-        javascriptreact = { 'prettierd', 'prettier', stop_after_first = true, prefer_local = 'node_modules/.bin' },
-        typescript = { 'prettierd', 'prettier', stop_after_first = true, prefer_local = 'node_modules/.bin' },
-        typescriptreact = { 'prettierd', 'prettier', stop_after_first = true, prefer_local = 'node_modules/.bin' },
+        javascript = { 'prettier', stop_after_first = true, prefer_local = 'node_modules/.bin' },
+        javascriptreact = { 'prettier', stop_after_first = true, prefer_local = 'node_modules/.bin' },
+        typescript = { 'prettier', stop_after_first = true, prefer_local = 'node_modules/.bin' },
+        typescriptreact = { 'prettier', stop_after_first = true, prefer_local = 'node_modules/.bin' },
         cpp = { 'clang-format' },
-        json = { 'prettierd', stop_after_first = true, prefer_local = 'node_modules/.bin' },
+        json = { 'prettier', stop_after_first = true, prefer_local = 'node_modules/.bin' },
         -- c = { 'clang-format' },
         gdscript = { 'gdtoolkit' },
-        markdown = { 'prettierd', stop_after_first = true, prefer_local = 'node_modules/.bin' },
+        -- markdown = { 'prettier', 'mdformat', 'cbfmt' },
+        -- markdown = { 'mdformat', 'cbfmt' },
+      },
+      formatters = {
+        prettier = {
+          command = 'pnpm',
+          args = { 'exec', 'prettier', '--stdin-filepath', '$FILENAME' },
+          cwd = function(self, ctx)
+            return require('conform.util').root_file { 'pnpm-lock.yaml', '.git' }(self, ctx)
+          end,
+        },
       },
     },
   },
@@ -1057,6 +1076,8 @@ require('lazy').setup({
     },
   },
 })
+
+require 'custom'
 
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et
