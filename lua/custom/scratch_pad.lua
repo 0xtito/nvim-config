@@ -2,8 +2,6 @@ local O = {}
 
 function O.open_scratch_buffer()
   local scratch_dir = vim.fn.stdpath 'data' .. '/scratch'
-  print(scratch_dir)
-  print '----'
   local scratch_file = scratch_dir .. '/scratch.md'
 
   -- Create the scratch directory if it doesn't exist
