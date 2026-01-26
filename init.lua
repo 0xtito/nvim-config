@@ -359,21 +359,21 @@ require('lazy').setup({
         F11 = '<F11>',
         F12 = '<F12>',
       },
-    },
 
-    spec = {
-      { '<leader>c', group = '[C]ode', mode = { 'n', 'x' } },
-      { '<leader>d', group = '[D]ocument' },
-      { '<leader>r', group = '[R]ename' },
-      { '<leader>s', group = '[S]earch' },
-      { '<leader>w', group = '[W]orkspace' },
-      { '<leader>t', group = '[T]oggle' },
-      { '<leader>gh', group = '[G]it [H]unk', mode = { 'n', 'v' } },
-      { '<leader>h', group = '[H]arpoon', mode = { 'n' } },
-      { '<leader>a', group = '[A]I', mode = { 'n' } },
-      { '<leader>z', group = '[Z]en Mode', mode = { 'n' } },
-      { '<leader>o', group = '[O]pen Scratch Pad', mode = { 'n' } },
-      { '<leader>T', group = '[T]oggleterm', mode = { 'n' } },
+      spec = {
+        { '<leader>c', group = '[C]ode', mode = { 'n', 'x' } },
+        { '<leader>d', group = '[D]ocument' },
+        { '<leader>r', group = '[R]ename' },
+        { '<leader>s', group = '[S]earch' },
+        { '<leader>w', group = '[W]orkspace' },
+        { '<leader>t', group = '[T]oggle' },
+        { '<leader>gh', group = '[G]it [H]unk', mode = { 'n', 'v' } },
+        { '<leader>h', group = '[H]arpoon', mode = { 'n' } },
+        { '<leader>a', group = '[A]I', mode = { 'n' } },
+        { '<leader>z', group = '[Z]en Mode', mode = { 'n' } },
+        { '<leader>o', group = '[O]pen Scratch Pad', mode = { 'n' } },
+        { '<leader>T', group = '[T]oggleterm', mode = { 'n' } },
+      },
     },
   },
 
@@ -738,7 +738,21 @@ require('lazy').setup({
       local servers =
         {
           clangd = {
+            cmd = {
+              'clangd',
+              '--background-index',
+              '--clang-tidy',
+              '--header-insertion=iwyu',
+              '--completion-style=detailed',
+              '--function-arg-placeholders',
+              '--fallback-style=llvm',
+            },
             filetypes = { 'c', 'cpp', 'objc', 'objcpp', 'cuda' },
+            init_options = {
+              usePlaceholders = true,
+              completeUnimported = true,
+              clangdFileStatus = true,
+            },
           },
           -- protols = {
           --   filetypes = { 'proto' },
@@ -810,6 +824,8 @@ require('lazy').setup({
       vim.list_extend(ensure_installed, {
         'stylua', -- Used to format Lua code
         'pyright', -- Explicitly ensure Pyright is installed
+        'clang-format', -- C/C++ formatter
+        'codelldb', -- C/C++ debugger
       })
       require('mason-tool-installer').setup { ensure_installed = ensure_installed }
 
@@ -904,7 +920,7 @@ require('lazy').setup({
         lsp_format = 'fallback',
       },
       format_on_save = function(bufnr)
-        local disable_filetypes = { c = true, cpp = true, objc = true, gdscript = false, lua = false, python = true, json = true, jsonc = true }
+        local disable_filetypes = { c = false, cpp = false, objc = false, gdscript = false, lua = false, python = true, json = true, jsonc = true }
         local lsp_format_opt
         if disable_filetypes[vim.bo[bufnr].filetype] then
           lsp_format_opt = 'never'
