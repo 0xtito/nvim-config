@@ -273,6 +273,17 @@ vim.opt.rtp:prepend(lazypath)
 
 pcall(require, 'vim.loader') -- Neovim ≥0.9
 
+-- Disabling conjure stuff
+vim.g['conjure#extract#tree_sitter#enabled'] = false
+vim.g['conjure#mapping#doc_word'] = false
+vim.g['conjure#completion#omnifunc'] = nil -- disable omnifunc completion
+vim.g['conjure#client#scheme#stdio#completion#enabled'] = false
+vim.g['conjure#log#wrap'] = true
+
+-- Moving blocks around
+vim.keymap.set('v', 'J', ":m '>+1<CR>gv=gv")
+vim.keymap.set('v', 'K', ":m '<-2<CR>gv=gv")
+
 -- [[ Configure and install plugins ]]
 --
 --  To check the current status of your plugins, run
@@ -1001,6 +1012,7 @@ require('lazy').setup({
         'typescript',
         'rust',
         'python',
+        'scheme',
       },
       -- Autoinstall languages that are not installed
       auto_install = true,
