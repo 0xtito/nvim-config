@@ -209,21 +209,39 @@ local FLAG_DEFINITIONS = {
   },
 }
 
--- Default enabled flags
-local DEFAULT_FLAGS = {
+-- Default enabled flags for each build mode
+local DEFAULT_DEBUG_FLAGS = {
   '-std=c++20',
   '-Wall',
   '-Wextra',
   '-g',
-  '-O2',
+  '-O0',
+  '-fno-omit-frame-pointer',
 }
 
-local DEFAULT_C_FLAGS = {
+local DEFAULT_RELEASE_FLAGS = {
+  '-std=c++20',
+  '-Wall',
+  '-Wextra',
+  '-O2',
+  '-DNDEBUG',
+}
+
+local DEFAULT_DEBUG_C_FLAGS = {
   '-std=c11',
   '-Wall',
   '-Wextra',
   '-g',
+  '-O0',
+  '-fno-omit-frame-pointer',
+}
+
+local DEFAULT_RELEASE_C_FLAGS = {
+  '-std=c11',
+  '-Wall',
+  '-Wextra',
   '-O2',
+  '-DNDEBUG',
 }
 
 -- Config (runtime)
@@ -253,10 +271,18 @@ local config = {
 
 -- Project config (loaded from file)
 local project_config = {
-  enabled_flags = vim.deepcopy(DEFAULT_FLAGS),
-  enabled_c_flags = vim.deepcopy(DEFAULT_C_FLAGS),
-  custom_flags = '', -- Additional custom flags
-  custom_c_flags = '',
+  build_mode = 'debug', -- 'debug' or 'release'
+  -- C++ flags
+  debug_flags = vim.deepcopy(DEFAULT_DEBUG_FLAGS),
+  release_flags = vim.deepcopy(DEFAULT_RELEASE_FLAGS),
+  custom_debug_flags = '',
+  custom_release_flags = '',
+  -- C flags
+  debug_c_flags = vim.deepcopy(DEFAULT_DEBUG_C_FLAGS),
+  release_c_flags = vim.deepcopy(DEFAULT_RELEASE_C_FLAGS),
+  custom_debug_c_flags = '',
+  custom_release_c_flags = '',
+  -- Run settings
   run_args = '',
   custom_run_cmd = nil,
 }
@@ -311,10 +337,18 @@ local function load_project_config()
     if #content > 0 then
       local ok, data = pcall(vim.fn.json_decode, table.concat(content, '\n'))
       if ok and data then
-        project_config.enabled_flags = from_json_value(data.enabled_flags, vim.deepcopy(DEFAULT_FLAGS))
-        project_config.enabled_c_flags = from_json_value(data.enabled_c_flags, vim.deepcopy(DEFAULT_C_FLAGS))
-        project_config.custom_flags = from_json_value(data.custom_flags, '')
-        project_config.custom_c_flags = from_json_value(data.custom_c_flags, '')
+        project_config.build_mode = from_json_value(data.build_mode, 'debug')
+        -- C++ flags
+        project_config.debug_flags = from_json_value(data.debug_flags, vim.deepcopy(DEFAULT_DEBUG_FLAGS))
+        project_config.release_flags = from_json_value(data.release_flags, vim.deepcopy(DEFAULT_RELEASE_FLAGS))
+        project_config.custom_debug_flags = from_json_value(data.custom_debug_flags, '')
+        project_config.custom_release_flags = from_json_value(data.custom_release_flags, '')
+        -- C flags
+        project_config.debug_c_flags = from_json_value(data.debug_c_flags, vim.deepcopy(DEFAULT_DEBUG_C_FLAGS))
+        project_config.release_c_flags = from_json_value(data.release_c_flags, vim.deepcopy(DEFAULT_RELEASE_C_FLAGS))
+        project_config.custom_debug_c_flags = from_json_value(data.custom_debug_c_flags, '')
+        project_config.custom_release_c_flags = from_json_value(data.custom_release_c_flags, '')
+        -- Run settings
         project_config.run_args = from_json_value(data.run_args, '')
         project_config.custom_run_cmd = from_json_value(data.custom_run_cmd, nil)
         -- Also load into runtime state
@@ -325,10 +359,15 @@ local function load_project_config()
     end
   end
   -- Reset to defaults
-  project_config.enabled_flags = vim.deepcopy(DEFAULT_FLAGS)
-  project_config.enabled_c_flags = vim.deepcopy(DEFAULT_C_FLAGS)
-  project_config.custom_flags = ''
-  project_config.custom_c_flags = ''
+  project_config.build_mode = 'debug'
+  project_config.debug_flags = vim.deepcopy(DEFAULT_DEBUG_FLAGS)
+  project_config.release_flags = vim.deepcopy(DEFAULT_RELEASE_FLAGS)
+  project_config.custom_debug_flags = ''
+  project_config.custom_release_flags = ''
+  project_config.debug_c_flags = vim.deepcopy(DEFAULT_DEBUG_C_FLAGS)
+  project_config.release_c_flags = vim.deepcopy(DEFAULT_RELEASE_C_FLAGS)
+  project_config.custom_debug_c_flags = ''
+  project_config.custom_release_c_flags = ''
   project_config.run_args = ''
   project_config.custom_run_cmd = nil
   return false
@@ -361,10 +400,15 @@ local function save_project_config()
     return '"' .. escaped .. '"'
   end
 
-  table.insert(lines, '  "enabled_flags": ' .. format_array(project_config.enabled_flags) .. ',')
-  table.insert(lines, '  "enabled_c_flags": ' .. format_array(project_config.enabled_c_flags) .. ',')
-  table.insert(lines, '  "custom_flags": ' .. format_string(project_config.custom_flags) .. ',')
-  table.insert(lines, '  "custom_c_flags": ' .. format_string(project_config.custom_c_flags) .. ',')
+  table.insert(lines, '  "build_mode": ' .. format_string(project_config.build_mode) .. ',')
+  table.insert(lines, '  "debug_flags": ' .. format_array(project_config.debug_flags) .. ',')
+  table.insert(lines, '  "release_flags": ' .. format_array(project_config.release_flags) .. ',')
+  table.insert(lines, '  "custom_debug_flags": ' .. format_string(project_config.custom_debug_flags) .. ',')
+  table.insert(lines, '  "custom_release_flags": ' .. format_string(project_config.custom_release_flags) .. ',')
+  table.insert(lines, '  "debug_c_flags": ' .. format_array(project_config.debug_c_flags) .. ',')
+  table.insert(lines, '  "release_c_flags": ' .. format_array(project_config.release_c_flags) .. ',')
+  table.insert(lines, '  "custom_debug_c_flags": ' .. format_string(project_config.custom_debug_c_flags) .. ',')
+  table.insert(lines, '  "custom_release_c_flags": ' .. format_string(project_config.custom_release_c_flags) .. ',')
   table.insert(lines, '  "run_args": ' .. format_string(state.run_args or '') .. ',')
   table.insert(lines, '  "custom_run_cmd": ' .. format_string(state.custom_run_cmd))
   table.insert(lines, '}')
@@ -373,10 +417,48 @@ local function save_project_config()
   vim.notify('Config saved to ' .. config_path, vim.log.levels.INFO)
 end
 
+-- Get the current flags based on build mode and language
+local function get_current_flags(is_c)
+  local mode = project_config.build_mode
+  if is_c then
+    return mode == 'debug' and project_config.debug_c_flags or project_config.release_c_flags
+  else
+    return mode == 'debug' and project_config.debug_flags or project_config.release_flags
+  end
+end
+
+-- Get the current custom flags based on build mode and language
+local function get_current_custom_flags(is_c)
+  local mode = project_config.build_mode
+  if is_c then
+    return mode == 'debug' and project_config.custom_debug_c_flags or project_config.custom_release_c_flags
+  else
+    return mode == 'debug' and project_config.custom_debug_flags or project_config.custom_release_flags
+  end
+end
+
+-- Set the current custom flags based on build mode and language
+local function set_current_custom_flags(is_c, value)
+  local mode = project_config.build_mode
+  if is_c then
+    if mode == 'debug' then
+      project_config.custom_debug_c_flags = value
+    else
+      project_config.custom_release_c_flags = value
+    end
+  else
+    if mode == 'debug' then
+      project_config.custom_debug_flags = value
+    else
+      project_config.custom_release_flags = value
+    end
+  end
+end
+
 -- Build flags string from enabled flags
 local function build_flags_string(is_c)
-  local enabled = is_c and project_config.enabled_c_flags or project_config.enabled_flags
-  local custom = is_c and project_config.custom_c_flags or project_config.custom_flags
+  local enabled = get_current_flags(is_c)
+  local custom = get_current_custom_flags(is_c)
   local flags = table.concat(enabled, ' ')
   if custom and custom ~= '' then
     flags = flags .. ' ' .. custom
@@ -386,14 +468,24 @@ end
 
 -- Check if flag is enabled
 local function is_flag_enabled(flag, is_c)
-  local enabled = is_c and project_config.enabled_c_flags or project_config.enabled_flags
+  local enabled = get_current_flags(is_c)
   return vim.tbl_contains(enabled, flag)
+end
+
+-- Get the key for current flags array based on build mode and language
+local function get_flags_key(is_c)
+  local mode = project_config.build_mode
+  if is_c then
+    return mode == 'debug' and 'debug_c_flags' or 'release_c_flags'
+  else
+    return mode == 'debug' and 'debug_flags' or 'release_flags'
+  end
 end
 
 -- Toggle a flag
 local function toggle_flag(flag, is_c)
-  local enabled = is_c and project_config.enabled_c_flags or project_config.enabled_flags
-  local key = is_c and 'enabled_c_flags' or 'enabled_flags'
+  local enabled = get_current_flags(is_c)
+  local key = get_flags_key(is_c)
 
   -- Handle mutually exclusive flags (optimization levels, standards)
   local exclusive_groups = {
@@ -453,9 +545,25 @@ local function render_config_popup(is_c)
   table.insert(lines, string.rep('─', 70))
   table.insert(line_data, { type = 'separator' })
 
+  -- Build mode selector
+  local mode = project_config.build_mode
+  local debug_indicator = mode == 'debug' and '●' or '○'
+  local release_indicator = mode == 'release' and '●' or '○'
+  table.insert(lines, ' Build Mode:  ' .. debug_indicator .. ' Debug    ' .. release_indicator .. ' Release')
+  table.insert(line_data, { type = 'build_mode' })
+  if mode == 'debug' then
+    table.insert(highlights, { line = #lines, hl = 'DiagnosticInfo', col_start = 14, col_end = 23 })
+  else
+    table.insert(highlights, { line = #lines, hl = 'DiagnosticOk', col_start = 26, col_end = 36 })
+  end
+
+  table.insert(lines, '')
+  table.insert(line_data, { type = 'empty' })
+
   -- Current flags preview
   local flags_str = build_flags_string(is_c)
-  table.insert(lines, ' Current: ' .. (flags_str ~= '' and flags_str or '(none)'))
+  local mode_label = mode == 'debug' and '[Debug]' or '[Release]'
+  table.insert(lines, ' ' .. mode_label .. ' Flags: ' .. (flags_str ~= '' and flags_str or '(none)'))
   table.insert(highlights, { line = #lines, hl = 'Comment' })
   table.insert(line_data, { type = 'preview' })
 
@@ -516,7 +624,7 @@ local function render_config_popup(is_c)
   table.insert(highlights, { line = #lines, hl = 'Special' })
   table.insert(line_data, { type = 'category', name = 'Custom' })
 
-  local custom = is_c and project_config.custom_c_flags or project_config.custom_flags
+  local custom = get_current_custom_flags(is_c)
   table.insert(lines, '   [Edit] ' .. (custom ~= '' and custom or '(none)'))
   table.insert(line_data, { type = 'custom_flags', is_c = is_c })
   table.insert(highlights, { line = #lines, hl = 'Function', col_start = 3, col_end = 9 })
@@ -544,8 +652,8 @@ local function render_config_popup(is_c)
   table.insert(line_data, { type = 'separator' })
 
   local loaded = vim.fn.filereadable(get_config_file_path()) == 1
-  local config_status = loaded and ' (project config loaded)' or ' (using defaults)'
-  table.insert(lines, ' Space:toggle  Enter:edit  o:open docs  s:save  r:reset  q:close' .. config_status)
+  local config_status = loaded and ' (loaded)' or ' (defaults)'
+  table.insert(lines, ' d:debug/release  Space:toggle  o:docs  s:save  r:reset  q:close' .. config_status)
   table.insert(highlights, { line = #lines, hl = 'Comment' })
   table.insert(line_data, { type = 'footer' })
 
@@ -651,12 +759,29 @@ function M.open_config()
     M.refresh_config_popup()
   end, opts)
 
+  -- Toggle debug/release mode
+  vim.keymap.set('n', 'd', function()
+    if project_config.build_mode == 'debug' then
+      project_config.build_mode = 'release'
+      vim.notify('Switched to Release mode', vim.log.levels.INFO)
+    else
+      project_config.build_mode = 'debug'
+      vim.notify('Switched to Debug mode', vim.log.levels.INFO)
+    end
+    M.refresh_config_popup()
+  end, opts)
+
   -- Reset to defaults
   vim.keymap.set('n', 'r', function()
-    project_config.enabled_flags = vim.deepcopy(DEFAULT_FLAGS)
-    project_config.enabled_c_flags = vim.deepcopy(DEFAULT_C_FLAGS)
-    project_config.custom_flags = ''
-    project_config.custom_c_flags = ''
+    project_config.build_mode = 'debug'
+    project_config.debug_flags = vim.deepcopy(DEFAULT_DEBUG_FLAGS)
+    project_config.release_flags = vim.deepcopy(DEFAULT_RELEASE_FLAGS)
+    project_config.custom_debug_flags = ''
+    project_config.custom_release_flags = ''
+    project_config.debug_c_flags = vim.deepcopy(DEFAULT_DEBUG_C_FLAGS)
+    project_config.release_c_flags = vim.deepcopy(DEFAULT_RELEASE_C_FLAGS)
+    project_config.custom_debug_c_flags = ''
+    project_config.custom_release_c_flags = ''
     state.run_args = ''
     state.custom_run_cmd = nil
     M.refresh_config_popup()
@@ -668,7 +793,7 @@ function M.open_config()
     local pos = vim.api.nvim_win_get_cursor(state.config_win)
     local ld = vim.b[state.config_buf].line_data
     for i = pos[1] + 1, #ld do
-      if ld[i].type == 'flag' or ld[i].type == 'custom_flags' or ld[i].type == 'run_args' or ld[i].type == 'run_cmd' then
+      if ld[i].type == 'flag' or ld[i].type == 'custom_flags' or ld[i].type == 'run_args' or ld[i].type == 'run_cmd' or ld[i].type == 'build_mode' then
         vim.api.nvim_win_set_cursor(state.config_win, { i, 0 })
         break
       end
@@ -679,7 +804,7 @@ function M.open_config()
     local pos = vim.api.nvim_win_get_cursor(state.config_win)
     local ld = vim.b[state.config_buf].line_data
     for i = pos[1] - 1, 1, -1 do
-      if ld[i].type == 'flag' or ld[i].type == 'custom_flags' or ld[i].type == 'run_args' or ld[i].type == 'run_cmd' then
+      if ld[i].type == 'flag' or ld[i].type == 'custom_flags' or ld[i].type == 'run_args' or ld[i].type == 'run_cmd' or ld[i].type == 'build_mode' then
         vim.api.nvim_win_set_cursor(state.config_win, { i, 0 })
         break
       end
@@ -743,21 +868,28 @@ function M.config_toggle_or_edit()
     return
   end
 
-  if data.type == 'flag' then
+  if data.type == 'build_mode' then
+    -- Toggle build mode
+    if project_config.build_mode == 'debug' then
+      project_config.build_mode = 'release'
+      vim.notify('Switched to Release mode', vim.log.levels.INFO)
+    else
+      project_config.build_mode = 'debug'
+      vim.notify('Switched to Debug mode', vim.log.levels.INFO)
+    end
+    M.refresh_config_popup()
+  elseif data.type == 'flag' then
     toggle_flag(data.flag, is_c)
     M.refresh_config_popup()
   elseif data.type == 'custom_flags' then
-    local current = is_c and project_config.custom_c_flags or project_config.custom_flags
+    local current = get_current_custom_flags(is_c)
+    local mode_label = project_config.build_mode == 'debug' and 'Debug' or 'Release'
     vim.ui.input({
-      prompt = 'Custom flags: ',
+      prompt = mode_label .. ' custom flags: ',
       default = current,
     }, function(input)
       if input ~= nil then
-        if is_c then
-          project_config.custom_c_flags = input
-        else
-          project_config.custom_flags = input
-        end
+        set_current_custom_flags(is_c, input)
         vim.schedule(function()
           M.refresh_config_popup()
         end)
@@ -1548,8 +1680,10 @@ function M.show_run_info()
   -- Load config
   load_project_config()
 
+  local mode_label = project_config.build_mode == 'debug' and 'Debug' or 'Release'
   local info = { 'Current configuration:' }
   table.insert(info, '')
+  table.insert(info, 'Build Mode: ' .. mode_label)
   table.insert(info, 'Compiler: ' .. (is_c and config.compiler.c or config.compiler.cpp))
   table.insert(info, 'Flags: ' .. build_flags_string(is_c))
   table.insert(info, '')
