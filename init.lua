@@ -363,6 +363,7 @@ require('lazy').setup({
       spec = {
         { '<leader>c', group = '[C]ode', mode = { 'n', 'x' } },
         { '<leader>d', group = '[D]ocument' },
+        { '<leader>b', group = '[B]ug/Debug' },
         { '<leader>r', group = '[R]ename' },
         { '<leader>s', group = '[S]earch' },
         { '<leader>w', group = '[W]orkspace' },
@@ -934,27 +935,40 @@ require('lazy').setup({
       end,
       formatters_by_ft = {
         lua = { 'stylua' },
-        -- Conform can also run multiple formatters sequentially
-
-        -- You can use a sub-list to tell conform to run *until* a formatter
-        -- is found.
-        javascript = { 'prettier', stop_after_first = true, prefer_local = 'node_modules/.bin' },
-        javascriptreact = { 'prettier', stop_after_first = true, prefer_local = 'node_modules/.bin' },
-        typescript = { 'prettier', stop_after_first = true, prefer_local = 'node_modules/.bin' },
-        typescriptreact = { 'prettier', stop_after_first = true, prefer_local = 'node_modules/.bin' },
+        javascript = { 'biome', 'prettier', stop_after_first = true },
+        javascriptreact = { 'biome', 'prettier', stop_after_first = true },
+        typescript = { 'biome', 'prettier', stop_after_first = true },
+        typescriptreact = { 'biome', 'prettier', stop_after_first = true },
+        json = { 'biome', 'prettier', stop_after_first = true },
+        jsonc = { 'biome', 'prettier', stop_after_first = true },
         cpp = { 'clang-format' },
-        json = { 'prettier', stop_after_first = true, prefer_local = 'node_modules/.bin' },
-        -- c = { 'clang-format' },
+        c = { 'clang-format' },
         gdscript = { 'gdtoolkit' },
-        -- markdown = { 'prettier', 'mdformat', 'cbfmt' },
-        -- markdown = { 'mdformat', 'cbfmt' },
       },
       formatters = {
-        prettier = {
-          command = 'pnpm',
-          args = { 'exec', 'prettier', '--stdin-filepath', '$FILENAME' },
+        biome = {
+          require_cwd = true,
           cwd = function(self, ctx)
-            return require('conform.util').root_file { 'pnpm-lock.yaml', '.git' }(self, ctx)
+            return require('conform.util').root_file { 'biome.json', 'biome.jsonc' }(self, ctx)
+          end,
+        },
+        prettier = {
+          require_cwd = true,
+          cwd = function(self, ctx)
+            return require('conform.util').root_file {
+              '.prettierrc',
+              '.prettierrc.json',
+              '.prettierrc.yml',
+              '.prettierrc.yaml',
+              '.prettierrc.json5',
+              '.prettierrc.js',
+              '.prettierrc.cjs',
+              '.prettierrc.mjs',
+              '.prettierrc.toml',
+              'prettier.config.js',
+              'prettier.config.cjs',
+              'prettier.config.mjs',
+            }(self, ctx)
           end,
         },
       },

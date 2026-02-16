@@ -17,6 +17,7 @@ local state = {
   source_file = nil, -- Track the file we're compiling
   run_args = '', -- Command line arguments for the executable
   custom_run_cmd = nil, -- Custom run command (nil = use default executable)
+  clear_log_on_run = true, -- Clear log before each build/run
   config_win = nil, -- Config popup window
   config_buf = nil, -- Config popup buffer
   cursor_line = 1, -- Current line in config popup
@@ -285,6 +286,7 @@ local project_config = {
   -- Run settings
   run_args = '',
   custom_run_cmd = nil,
+  clear_log_on_run = true,
 }
 
 -- Utilities
@@ -303,6 +305,131 @@ end
 
 local function is_cpp_file(ext)
   return vim.tbl_contains({ 'cpp', 'cc', 'cxx', 'c', 'h', 'hpp' }, ext)
+end
+
+-- Build system detection
+local function find_file_upward(filename, start_dir)
+  local dir = start_dir or vim.fn.expand('%:p:h')
+  local root = '/'
+  while dir ~= root do
+    local path = dir .. '/' .. filename
+    if vim.fn.filereadable(path) == 1 then
+      return dir, path
+    end
+    -- Check if it's a directory (for build dirs)
+    if vim.fn.isdirectory(path) == 1 then
+      return dir, path
+    end
+    dir = vim.fn.fnamemodify(dir, ':h')
+  end
+  return nil, nil
+end
+
+local function detect_build_system()
+  local file_dir = vim.fn.expand('%:p:h')
+
+  -- Check for CMake (CMakeLists.txt)
+  -- Prefer the git root's CMakeLists.txt over the nearest one,
+  -- since subdirectories may have their own CMakeLists.txt files
+  local cmake_dir, cmake_file = find_file_upward('CMakeLists.txt', file_dir)
+  local git_root = vim.fn.systemlist('git rev-parse --show-toplevel 2>/dev/null')[1]
+  if git_root and git_root ~= '' and vim.fn.filereadable(git_root .. '/CMakeLists.txt') == 1 then
+    cmake_dir = git_root
+    cmake_file = git_root .. '/CMakeLists.txt'
+  end
+  if cmake_dir then
+    -- Look for build directory
+    local build_dir = nil
+    local possible_build_dirs = { 'build', 'cmake-build-debug', 'cmake-build-release', 'out/build' }
+    for _, bd in ipairs(possible_build_dirs) do
+      local full_path = cmake_dir .. '/' .. bd
+      if vim.fn.isdirectory(full_path) == 1 then
+        -- Check if it has CMakeCache.txt (configured)
+        if vim.fn.filereadable(full_path .. '/CMakeCache.txt') == 1 then
+          build_dir = full_path
+          break
+        end
+      end
+    end
+    return {
+      type = 'cmake',
+      root = cmake_dir,
+      build_dir = build_dir,
+      configured = build_dir ~= nil,
+    }
+  end
+
+  -- Check for Ninja (build.ninja in current or build dir)
+  local ninja_dir, _ = find_file_upward('build.ninja', file_dir)
+  if ninja_dir then
+    return {
+      type = 'ninja',
+      root = ninja_dir,
+      build_dir = ninja_dir,
+      configured = true,
+    }
+  end
+
+  -- Check for Make (Makefile)
+  local make_dir, _ = find_file_upward('Makefile', file_dir)
+  if not make_dir then
+    make_dir, _ = find_file_upward('makefile', file_dir)
+  end
+  if make_dir then
+    return {
+      type = 'make',
+      root = make_dir,
+      build_dir = make_dir,
+      configured = true,
+    }
+  end
+
+  -- No build system detected
+  return {
+    type = 'none',
+    root = nil,
+    build_dir = nil,
+    configured = false,
+  }
+end
+
+-- Find CMake executable name by parsing CMakeLists.txt
+local function find_cmake_executable(cmake_root, build_dir)
+  local cmake_file = cmake_root .. '/CMakeLists.txt'
+  if vim.fn.filereadable(cmake_file) ~= 1 then
+    return nil
+  end
+
+  -- Parse CMakeLists.txt for project name
+  local lines = vim.fn.readfile(cmake_file)
+  local project_name = nil
+
+  for _, line in ipairs(lines) do
+    -- Match project(NAME ...) or project(NAME)
+    local name = line:match('project%s*%(%s*([%w_%-]+)')
+    if name then
+      project_name = name
+      break
+    end
+  end
+
+  if not project_name then
+    return nil
+  end
+
+  -- Return the executable path, checking build_dir first, then bin/
+  local build_path = build_dir .. '/' .. project_name
+  if vim.fn.filereadable(build_path) == 1 then
+    return build_path
+  end
+
+  local bin_path = cmake_root .. '/bin/' .. project_name
+  if vim.fn.filereadable(bin_path) == 1 then
+    return bin_path
+  end
+
+  -- Default to build_dir path (will be created after build)
+  return build_path
 end
 
 -- Config file handling
@@ -351,9 +478,11 @@ local function load_project_config()
         -- Run settings
         project_config.run_args = from_json_value(data.run_args, '')
         project_config.custom_run_cmd = from_json_value(data.custom_run_cmd, nil)
+        project_config.clear_log_on_run = from_json_value(data.clear_log_on_run, true)
         -- Also load into runtime state
         state.run_args = project_config.run_args
         state.custom_run_cmd = project_config.custom_run_cmd
+        state.clear_log_on_run = project_config.clear_log_on_run
         return true
       end
     end
@@ -370,6 +499,7 @@ local function load_project_config()
   project_config.custom_release_c_flags = ''
   project_config.run_args = ''
   project_config.custom_run_cmd = nil
+  project_config.clear_log_on_run = true
   return false
 end
 
@@ -410,7 +540,8 @@ local function save_project_config()
   table.insert(lines, '  "custom_debug_c_flags": ' .. format_string(project_config.custom_debug_c_flags) .. ',')
   table.insert(lines, '  "custom_release_c_flags": ' .. format_string(project_config.custom_release_c_flags) .. ',')
   table.insert(lines, '  "run_args": ' .. format_string(state.run_args or '') .. ',')
-  table.insert(lines, '  "custom_run_cmd": ' .. format_string(state.custom_run_cmd))
+  table.insert(lines, '  "custom_run_cmd": ' .. format_string(state.custom_run_cmd) .. ',')
+  table.insert(lines, '  "clear_log_on_run": ' .. tostring(state.clear_log_on_run ~= false))
   table.insert(lines, '}')
 
   vim.fn.writefile(lines, config_path)
@@ -545,16 +676,36 @@ local function render_config_popup(is_c)
   table.insert(lines, string.rep('─', 70))
   table.insert(line_data, { type = 'separator' })
 
+  -- Build system info
+  local bs = detect_build_system()
+  local bs_label
+  if bs.type == 'none' then
+    bs_label = 'Single file (g++)'
+  elseif bs.type == 'cmake' then
+    bs_label = 'CMake' .. (bs.configured and ' ✓' or ' (not configured)')
+  elseif bs.type == 'make' then
+    bs_label = 'Make ✓'
+  elseif bs.type == 'ninja' then
+    bs_label = 'Ninja ✓'
+  end
+  table.insert(lines, ' Build System: ' .. bs_label)
+  table.insert(line_data, { type = 'info' })
+  if bs.type ~= 'none' then
+    table.insert(highlights, { line = #lines, hl = 'DiagnosticOk', col_start = 15, col_end = -1 })
+  else
+    table.insert(highlights, { line = #lines, hl = 'Comment', col_start = 15, col_end = -1 })
+  end
+
   -- Build mode selector
   local mode = project_config.build_mode
   local debug_indicator = mode == 'debug' and '●' or '○'
   local release_indicator = mode == 'release' and '●' or '○'
-  table.insert(lines, ' Build Mode:  ' .. debug_indicator .. ' Debug    ' .. release_indicator .. ' Release')
+  table.insert(lines, ' Build Mode:   ' .. debug_indicator .. ' Debug    ' .. release_indicator .. ' Release')
   table.insert(line_data, { type = 'build_mode' })
   if mode == 'debug' then
-    table.insert(highlights, { line = #lines, hl = 'DiagnosticInfo', col_start = 14, col_end = 23 })
+    table.insert(highlights, { line = #lines, hl = 'DiagnosticInfo', col_start = 15, col_end = 24 })
   else
-    table.insert(highlights, { line = #lines, hl = 'DiagnosticOk', col_start = 26, col_end = 36 })
+    table.insert(highlights, { line = #lines, hl = 'DiagnosticOk', col_start = 27, col_end = 37 })
   end
 
   table.insert(lines, '')
@@ -563,8 +714,13 @@ local function render_config_popup(is_c)
   -- Current flags preview
   local flags_str = build_flags_string(is_c)
   local mode_label = mode == 'debug' and '[Debug]' or '[Release]'
-  table.insert(lines, ' ' .. mode_label .. ' Flags: ' .. (flags_str ~= '' and flags_str or '(none)'))
-  table.insert(highlights, { line = #lines, hl = 'Comment' })
+  if bs.type == 'cmake' then
+    table.insert(lines, ' ' .. mode_label .. ' Flags: (managed by CMakeLists.txt)')
+    table.insert(highlights, { line = #lines, hl = 'Comment' })
+  else
+    table.insert(lines, ' ' .. mode_label .. ' Flags: ' .. (flags_str ~= '' and flags_str or '(none)'))
+    table.insert(highlights, { line = #lines, hl = 'Comment' })
+  end
   table.insert(line_data, { type = 'preview' })
 
   table.insert(lines, '')
@@ -640,10 +796,26 @@ local function render_config_popup(is_c)
   table.insert(line_data, { type = 'run_args' })
   table.insert(highlights, { line = #lines, hl = 'Function', col_start = 3, col_end = 9 })
 
-  local cmd_display = (state.custom_run_cmd and state.custom_run_cmd ~= vim.NIL) and state.custom_run_cmd or '(default)'
+  local cmd_display
+  if state.custom_run_cmd and state.custom_run_cmd ~= '' and state.custom_run_cmd ~= vim.NIL then
+    cmd_display = state.custom_run_cmd
+  elseif bs.build_dir then
+    local default_exe = find_cmake_executable(bs.root, bs.build_dir)
+    cmd_display = default_exe and default_exe or '(default)'
+  else
+    cmd_display = '(default)'
+  end
   table.insert(lines, '   [Edit] Command: ' .. cmd_display)
   table.insert(line_data, { type = 'run_cmd' })
   table.insert(highlights, { line = #lines, hl = 'Function', col_start = 3, col_end = 9 })
+
+  local clear_log_enabled = state.clear_log_on_run ~= false
+  local clear_log_checkbox = clear_log_enabled and '[x]' or '[ ]'
+  table.insert(lines, '   ' .. clear_log_checkbox .. ' Clear log on run')
+  table.insert(line_data, { type = 'clear_log_toggle' })
+  if clear_log_enabled then
+    table.insert(highlights, { line = #lines, hl = 'String', col_start = 3, col_end = 6 })
+  end
 
   -- Footer
   table.insert(lines, '')
@@ -653,7 +825,10 @@ local function render_config_popup(is_c)
 
   local loaded = vim.fn.filereadable(get_config_file_path()) == 1
   local config_status = loaded and ' (loaded)' or ' (defaults)'
-  table.insert(lines, ' d:debug/release  Space:toggle  o:docs  s:save  r:reset  q:close' .. config_status)
+  table.insert(lines, ' d:mode  Space:toggle  o:docs  s:save  r:reset  q:close' .. config_status)
+  table.insert(highlights, { line = #lines, hl = 'Comment' })
+  table.insert(line_data, { type = 'footer' })
+  table.insert(lines, ' <leader>cB:build project  <leader>cM:cmake  <leader>cI:info')
   table.insert(highlights, { line = #lines, hl = 'Comment' })
   table.insert(line_data, { type = 'footer' })
 
@@ -793,7 +968,7 @@ function M.open_config()
     local pos = vim.api.nvim_win_get_cursor(state.config_win)
     local ld = vim.b[state.config_buf].line_data
     for i = pos[1] + 1, #ld do
-      if ld[i].type == 'flag' or ld[i].type == 'custom_flags' or ld[i].type == 'run_args' or ld[i].type == 'run_cmd' or ld[i].type == 'build_mode' then
+      if ld[i].type == 'flag' or ld[i].type == 'custom_flags' or ld[i].type == 'run_args' or ld[i].type == 'run_cmd' or ld[i].type == 'clear_log_toggle' or ld[i].type == 'build_mode' then
         vim.api.nvim_win_set_cursor(state.config_win, { i, 0 })
         break
       end
@@ -804,7 +979,7 @@ function M.open_config()
     local pos = vim.api.nvim_win_get_cursor(state.config_win)
     local ld = vim.b[state.config_buf].line_data
     for i = pos[1] - 1, 1, -1 do
-      if ld[i].type == 'flag' or ld[i].type == 'custom_flags' or ld[i].type == 'run_args' or ld[i].type == 'run_cmd' or ld[i].type == 'build_mode' then
+      if ld[i].type == 'flag' or ld[i].type == 'custom_flags' or ld[i].type == 'run_args' or ld[i].type == 'run_cmd' or ld[i].type == 'clear_log_toggle' or ld[i].type == 'build_mode' then
         vim.api.nvim_win_set_cursor(state.config_win, { i, 0 })
         break
       end
@@ -920,6 +1095,9 @@ function M.config_toggle_or_edit()
         end)
       end
     end)
+  elseif data.type == 'clear_log_toggle' then
+    state.clear_log_on_run = not (state.clear_log_on_run ~= false)
+    M.refresh_config_popup()
   end
 end
 
@@ -1179,7 +1357,7 @@ function M.show_float(lines, title, hl_group, is_error)
   table.insert(footer_parts, 'l:log')
   table.insert(footer_parts, 'r:run')
   table.insert(footer_parts, 'y:copy')
-  table.insert(footer_parts, '<leader>cg:config')
+  table.insert(footer_parts, '<leader>c?:config')
   local footer = ' ' .. table.concat(footer_parts, '  ') .. ' '
 
   -- Create window with footer
@@ -1273,7 +1451,7 @@ end
 
 function M.open_log_panel()
   if state.log_win and vim.api.nvim_win_is_valid(state.log_win) then
-    vim.api.nvim_set_current_win(state.log_win)
+    -- Panel already open, don't steal focus
     return
   end
 
@@ -1330,6 +1508,12 @@ function M.run(opts)
     state.job_id = nil
   end
 
+  -- Clear log if enabled
+  if state.clear_log_on_run ~= false then
+    local buf = M.get_log_buf()
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, { '' })
+  end
+
   -- Reset error state
   state.last_errors = {}
   state.has_errors = false
@@ -1338,13 +1522,144 @@ function M.run(opts)
   -- Save file
   vim.cmd 'silent! write'
 
+  -- Load project config if available
+  load_project_config()
+
+  -- Check for CMake project
+  local bs = detect_build_system()
+  if bs.type == 'cmake' then
+    -- Use CMake build + run flow
+    if not bs.configured then
+      vim.notify('CMake project not configured. Run <leader>cM first.', vim.log.levels.WARN)
+      return
+    end
+
+    local cmake_executable = find_cmake_executable(bs.root, bs.build_dir)
+    if not cmake_executable then
+      vim.notify('Could not determine CMake executable name', vim.log.levels.ERROR)
+      return
+    end
+
+    M.add_separator()
+    M.append_to_log('Building CMake project...', config.icons.building .. ' CMake Build')
+
+    if output_mode == 'float' or output_mode == 'both' then
+      M.show_float({ 'Building CMake project...' }, config.icons.building .. ' Building', 'DiagnosticInfo', false)
+    end
+
+    -- Get number of parallel jobs
+    local parallel_jobs = vim.fn.system('sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4'):gsub('%s+', '')
+
+    -- Build command (cmake --build or ninja directly)
+    local build_cmd = string.format('cd "%s" && cmake --build "%s" -j%s 2>&1', bs.root, bs.build_dir, parallel_jobs)
+
+    local build_output = {}
+    local run_output = {}
+
+    state.job_id = vim.fn.jobstart(build_cmd, {
+      stdout_buffered = true,
+      stderr_buffered = true,
+      on_stdout = function(_, data)
+        if data then
+          for _, line in ipairs(data) do
+            if line ~= '' then table.insert(build_output, line) end
+          end
+        end
+      end,
+      on_stderr = function(_, data)
+        if data then
+          for _, line in ipairs(data) do
+            if line ~= '' then table.insert(build_output, line) end
+          end
+        end
+      end,
+      on_exit = function(_, exit_code)
+        vim.schedule(function()
+          if exit_code ~= 0 then
+            state.last_errors = parse_errors(build_output)
+            state.has_errors = true
+            M.append_to_log('CMake build failed (exit code: ' .. exit_code .. ')', config.icons.error)
+            for _, line in ipairs(build_output) do
+              M.append_to_log(line, '')
+            end
+            if output_mode == 'float' or output_mode == 'both' then
+              local display = { 'Build failed!' }
+              vim.list_extend(display, build_output)
+              M.show_float(display, config.icons.error .. ' Build Error', 'DiagnosticError', true)
+            end
+            state.job_id = nil
+            return
+          end
+
+          M.append_to_log('Build successful', config.icons.success)
+
+          -- Now run the executable
+          local run_cmd
+          local run_args = state.run_args or ''
+          if state.custom_run_cmd and state.custom_run_cmd ~= '' and state.custom_run_cmd ~= vim.NIL then
+            run_cmd = state.custom_run_cmd
+          else
+            run_cmd = string.format('"%s" %s 2>&1', cmake_executable, run_args)
+          end
+
+          M.append_to_log('Running: ' .. run_cmd, config.icons.running)
+
+          state.job_id = vim.fn.jobstart(run_cmd, {
+            stdout_buffered = true,
+            stderr_buffered = true,
+            on_stdout = function(_, data)
+              if data then
+                for _, line in ipairs(data) do
+                  if line ~= '' then table.insert(run_output, line) end
+                end
+              end
+            end,
+            on_stderr = function(_, data)
+              if data then
+                for _, line in ipairs(data) do
+                  if line ~= '' then table.insert(run_output, line) end
+                end
+              end
+            end,
+            on_exit = function(_, run_exit_code)
+              vim.schedule(function()
+                state.job_id = nil
+                M.append_to_log('Exit code: ' .. run_exit_code, run_exit_code == 0 and config.icons.success or config.icons.error)
+                for _, line in ipairs(run_output) do
+                  M.append_to_log(line, '')
+                end
+
+                if output_mode == 'float' or output_mode == 'both' then
+                  local icon = run_exit_code == 0 and config.icons.success or config.icons.error
+                  local hl = run_exit_code == 0 and 'DiagnosticOk' or 'DiagnosticError'
+                  local display = {}
+                  if #run_output > 0 then
+                    vim.list_extend(display, run_output)
+                  else
+                    table.insert(display, '(no output)')
+                  end
+                  table.insert(display, '')
+                  table.insert(display, 'Exit code: ' .. run_exit_code)
+                  M.show_float(display, icon .. ' Output', hl, true)
+                end
+
+                if output_mode == 'panel' or output_mode == 'both' then
+                  M.open_log_panel()
+                end
+              end)
+            end,
+          })
+        end)
+      end,
+    })
+    return -- Exit early, CMake flow handles everything
+  end
+
+  -- Single file compilation (no CMake)
   local is_c = file_info.ext == 'c'
   local compiler = is_c and config.compiler.c or config.compiler.cpp
   local flags = build_flags_string(is_c)
   local executable = file_info.dir .. '/' .. file_info.name
-
-  -- Load project config if available
-  load_project_config()
 
   M.add_separator()
   M.append_to_log(file_info.name .. '.' .. file_info.ext, config.icons.building .. ' Building')
@@ -1622,6 +1937,288 @@ function M.compile_float()
   M.compile { mode = 'float' }
 end
 
+-- Project build system functions
+function M.get_build_system_info()
+  return detect_build_system()
+end
+
+function M.configure_cmake(opts)
+  opts = opts or {}
+  local output_mode = opts.mode or 'float'
+
+  local bs = detect_build_system()
+  if bs.type ~= 'cmake' then
+    vim.notify('No CMakeLists.txt found', vim.log.levels.ERROR)
+    return
+  end
+
+  -- Determine build directory
+  local build_dir = bs.build_dir or (bs.root .. '/build')
+
+  -- Create build directory if it doesn't exist
+  if vim.fn.isdirectory(build_dir) == 0 then
+    vim.fn.mkdir(build_dir, 'p')
+  end
+
+  -- Determine build type based on our config
+  load_project_config()
+  local build_type = project_config.build_mode == 'debug' and 'Debug' or 'Release'
+
+  -- Check if Ninja is available and use it as the generator
+  local has_ninja = vim.fn.executable('ninja') == 1
+  local generator_name = has_ninja and 'Ninja' or 'Make'
+
+  M.add_separator()
+  M.append_to_log('Configuring CMake (' .. build_type .. ', ' .. generator_name .. ')', config.icons.building .. ' CMake')
+
+  if output_mode == 'float' or output_mode == 'both' then
+    M.show_float({ 'Configuring CMake...', '', 'Build type: ' .. build_type, 'Generator: ' .. generator_name }, config.icons.building .. ' CMake Configure', 'DiagnosticInfo', false)
+  end
+
+  local generator_flag = has_ninja and '-G Ninja ' or ''
+  local cmake_cmd = string.format('cd "%s" && cmake %s-S "%s" -B "%s" -DCMAKE_BUILD_TYPE=%s -DCMAKE_EXPORT_COMPILE_COMMANDS=ON 2>&1',
+    bs.root, generator_flag, bs.root, build_dir, build_type)
+
+  local output = {}
+
+  state.job_id = vim.fn.jobstart(cmake_cmd, {
+    stdout_buffered = true,
+    stderr_buffered = true,
+    on_stdout = function(_, data)
+      if data then
+        for _, line in ipairs(data) do
+          if line ~= '' then
+            table.insert(output, line)
+          end
+        end
+      end
+    end,
+    on_stderr = function(_, data)
+      if data then
+        for _, line in ipairs(data) do
+          if line ~= '' then
+            table.insert(output, line)
+          end
+        end
+      end
+    end,
+    on_exit = function(_, exit_code)
+      vim.schedule(function()
+        state.job_id = nil
+
+        if exit_code ~= 0 then
+          M.append_to_log('CMake configure failed (exit code: ' .. exit_code .. ')', config.icons.error)
+          for _, line in ipairs(output) do
+            M.append_to_log(line, '')
+          end
+
+          if output_mode == 'float' or output_mode == 'both' then
+            local display = { 'CMake configure failed!' }
+            vim.list_extend(display, output)
+            M.show_float(display, config.icons.error .. ' CMake Error', 'DiagnosticError', true)
+          end
+        else
+          M.append_to_log('CMake configured successfully (' .. generator_name .. ')', config.icons.success)
+          M.append_to_log('Build dir: ' .. build_dir, '')
+
+          if output_mode == 'float' or output_mode == 'both' then
+            local display = {
+              'CMake configured successfully!',
+              '',
+              'Build type: ' .. build_type,
+              'Generator: ' .. generator_name,
+              'Build dir: ' .. build_dir,
+            }
+            M.show_float(display, config.icons.success .. ' CMake Ready', 'DiagnosticOk', false)
+          end
+        end
+
+        if output_mode == 'panel' or output_mode == 'both' then
+          M.open_log_panel()
+        end
+      end)
+    end,
+  })
+end
+
+function M.build_project(opts)
+  opts = opts or {}
+  local output_mode = opts.mode or 'float'
+
+  local bs = detect_build_system()
+
+  if bs.type == 'none' then
+    vim.notify('No build system detected (CMake, Make, or Ninja)', vim.log.levels.WARN)
+    -- Fall back to single file compilation
+    M.run(opts)
+    return
+  end
+
+  -- For CMake, check if configured
+  if bs.type == 'cmake' and not bs.configured then
+    vim.notify('CMake project not configured. Run configure first (<leader>cM)', vim.log.levels.WARN)
+    return
+  end
+
+  load_project_config()
+
+  -- Build the command based on build system
+  local build_cmd
+  local build_dir = bs.build_dir or bs.root
+  local parallel_jobs = vim.fn.system('nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4'):gsub('%s+', '')
+
+  if bs.type == 'cmake' then
+    -- Use cmake --build for portability
+    local build_type = project_config.build_mode == 'debug' and 'Debug' or 'Release'
+    build_cmd = string.format('cmake --build "%s" --config %s -j%s 2>&1', build_dir, build_type, parallel_jobs)
+  elseif bs.type == 'ninja' then
+    build_cmd = string.format('cd "%s" && ninja -j%s 2>&1', build_dir, parallel_jobs)
+  elseif bs.type == 'make' then
+    build_cmd = string.format('cd "%s" && make -j%s 2>&1', build_dir, parallel_jobs)
+  end
+
+  M.add_separator()
+  local mode_label = project_config.build_mode == 'debug' and 'Debug' or 'Release'
+  M.append_to_log('Building project (' .. bs.type .. ' - ' .. mode_label .. ')', config.icons.building .. ' Project')
+
+  if output_mode == 'float' or output_mode == 'both' then
+    M.show_float({
+      'Building project...',
+      '',
+      'Build system: ' .. bs.type,
+      'Mode: ' .. mode_label,
+    }, config.icons.building .. ' Project Build', 'DiagnosticInfo', false)
+  end
+
+  local output = {}
+  state.last_errors = {}
+  state.has_errors = false
+
+  state.job_id = vim.fn.jobstart(build_cmd, {
+    stdout_buffered = true,
+    stderr_buffered = true,
+    on_stdout = function(_, data)
+      if data then
+        for _, line in ipairs(data) do
+          if line ~= '' then
+            table.insert(output, line)
+          end
+        end
+      end
+    end,
+    on_stderr = function(_, data)
+      if data then
+        for _, line in ipairs(data) do
+          if line ~= '' then
+            table.insert(output, line)
+          end
+        end
+      end
+    end,
+    on_exit = function(_, exit_code)
+      vim.schedule(function()
+        state.job_id = nil
+
+        -- Parse errors from output
+        state.last_errors = parse_errors(output)
+        state.has_errors = exit_code ~= 0
+
+        if exit_code ~= 0 then
+          M.append_to_log('Build failed (exit code: ' .. exit_code .. ')', config.icons.error)
+          -- Show last few lines of output
+          local start_idx = math.max(1, #output - 20)
+          for i = start_idx, #output do
+            M.append_to_log(output[i], '')
+          end
+
+          if output_mode == 'float' or output_mode == 'both' then
+            local display = { 'Build failed!' }
+            -- Show relevant error lines
+            local error_lines = {}
+            for _, line in ipairs(output) do
+              if line:match('error:') or line:match('Error:') or line:match('ERROR') then
+                table.insert(error_lines, line)
+              end
+            end
+            if #error_lines > 0 then
+              table.insert(display, '')
+              for i = 1, math.min(10, #error_lines) do
+                table.insert(display, error_lines[i])
+              end
+            else
+              -- Show last few lines
+              table.insert(display, '')
+              for i = math.max(1, #output - 5), #output do
+                table.insert(display, output[i])
+              end
+            end
+            M.show_float(display, config.icons.error .. ' Build Error', 'DiagnosticError', true)
+          end
+        else
+          M.append_to_log('Build successful', config.icons.success)
+
+          if output_mode == 'float' or output_mode == 'both' then
+            local display = {
+              'Build successful!',
+              '',
+              'Build system: ' .. bs.type,
+              'Mode: ' .. mode_label,
+            }
+            -- Check for warnings
+            local warning_count = 0
+            for _, line in ipairs(output) do
+              if line:match('warning:') or line:match('Warning:') then
+                warning_count = warning_count + 1
+              end
+            end
+            if warning_count > 0 then
+              table.insert(display, 'Warnings: ' .. warning_count)
+            end
+            M.show_float(display, config.icons.success .. ' Build Complete', 'DiagnosticOk', false)
+          end
+        end
+
+        if output_mode == 'panel' or output_mode == 'both' then
+          M.open_log_panel()
+        end
+      end)
+    end,
+  })
+end
+
+function M.build_project_float()
+  M.build_project({ mode = 'float' })
+end
+
+function M.configure_cmake_float()
+  M.configure_cmake({ mode = 'float' })
+end
+
+function M.show_build_system_info()
+  local bs = detect_build_system()
+  load_project_config()
+
+  local info = { 'Build System Info:' }
+  table.insert(info, '')
+
+  if bs.type == 'none' then
+    table.insert(info, 'No build system detected')
+    table.insert(info, '')
+    table.insert(info, 'Will use single-file compilation')
+  else
+    table.insert(info, 'Type: ' .. bs.type:upper())
+    table.insert(info, 'Root: ' .. (bs.root or 'N/A'))
+    if bs.build_dir then
+      table.insert(info, 'Build dir: ' .. bs.build_dir)
+    end
+    table.insert(info, 'Configured: ' .. (bs.configured and 'Yes' or 'No'))
+    table.insert(info, '')
+    table.insert(info, 'Mode: ' .. (project_config.build_mode == 'debug' and 'Debug' or 'Release'))
+  end
+
+  M.show_float(info, ' Build System', 'DiagnosticInfo', false)
+end
+
 -- Set run arguments
 function M.set_run_args()
   vim.ui.input({
@@ -1699,6 +2296,58 @@ function M.show_run_info()
   M.show_float(info, ' Config', 'DiagnosticInfo', false)
 end
 
+-- Public API for DAP integration
+
+--- Get the current executable path (auto-detected from build system or single file)
+--- @return string|nil executable path, or nil if not found
+function M.get_current_executable()
+  load_project_config()
+
+  local build_system = detect_build_system()
+
+  if build_system.type == 'cmake' and build_system.configured then
+    local exe = find_cmake_executable(build_system.root, build_system.build_dir)
+    if exe and vim.fn.filereadable(exe) == 1 then
+      return exe
+    end
+    -- Also check bin/ directory
+    local bin_exe = build_system.root .. '/bin'
+    if vim.fn.isdirectory(bin_exe) == 1 then
+      local files = vim.fn.glob(bin_exe .. '/*', false, true)
+      for _, f in ipairs(files) do
+        if vim.fn.executable(f) == 1 then
+          return f
+        end
+      end
+    end
+  end
+
+  -- Fall back to single-file executable (same name as source file)
+  local file_info = get_file_info()
+  if is_cpp_file(file_info.ext) then
+    local exe = file_info.dir .. '/' .. file_info.name
+    if vim.fn.filereadable(exe) == 1 then
+      return exe
+    end
+  end
+
+  return nil
+end
+
+--- Get the current run arguments
+--- @return string arguments string (may be empty)
+function M.get_run_args()
+  load_project_config()
+  return state.run_args or ''
+end
+
+--- Get the current build mode
+--- @return string 'debug' or 'release'
+function M.get_build_mode()
+  load_project_config()
+  return project_config.build_mode or 'debug'
+end
+
 -- Setup keymaps
 local function setup_keymaps()
   vim.api.nvim_create_autocmd('FileType', {
@@ -1706,14 +2355,22 @@ local function setup_keymaps()
     callback = function()
       local opts = { buffer = true, silent = true }
 
-      vim.keymap.set('n', '<leader>cr', M.run_float, vim.tbl_extend('force', opts, { desc = 'Run (float)' }))
-      vim.keymap.set('n', '<leader>cR', M.run_panel, vim.tbl_extend('force', opts, { desc = 'Run (panel)' }))
-      vim.keymap.set('n', '<leader>cb', M.run_both, vim.tbl_extend('force', opts, { desc = 'Run (both)' }))
-      vim.keymap.set('n', '<leader>cc', M.compile_float, vim.tbl_extend('force', opts, { desc = 'Compile only' }))
+      -- Single file
+      vim.keymap.set('n', '<leader>cr', M.run_float, vim.tbl_extend('force', opts, { desc = 'Run file (float)' }))
+      vim.keymap.set('n', '<leader>cR', M.run_panel, vim.tbl_extend('force', opts, { desc = 'Run file (panel)' }))
+      vim.keymap.set('n', '<leader>cc', M.compile_float, vim.tbl_extend('force', opts, { desc = 'Compile file' }))
+
+      -- Project build (CMake/Make/Ninja)
+      vim.keymap.set('n', '<leader>cB', M.build_project_float, vim.tbl_extend('force', opts, { desc = 'Build project' }))
+      vim.keymap.set('n', '<leader>cM', M.configure_cmake_float, vim.tbl_extend('force', opts, { desc = 'Configure CMake' }))
+      vim.keymap.set('n', '<leader>cI', M.show_build_system_info, vim.tbl_extend('force', opts, { desc = 'Build system info' }))
+
+      -- Settings
       vim.keymap.set('n', '<leader>cp', M.set_run_args, vim.tbl_extend('force', opts, { desc = 'Set run params' }))
       vim.keymap.set('n', '<leader>cC', M.set_run_cmd, vim.tbl_extend('force', opts, { desc = 'Set run command' }))
-      vim.keymap.set('n', '<leader>c?', M.show_run_info, vim.tbl_extend('force', opts, { desc = 'Show run config' }))
-      vim.keymap.set('n', '<leader>cg', M.open_config, vim.tbl_extend('force', opts, { desc = 'Config popup' }))
+      vim.keymap.set('n', '<leader>c?', M.open_config, vim.tbl_extend('force', opts, { desc = 'Config popup' }))
+
+      -- Log/output
       vim.keymap.set('n', '<leader>cl', M.toggle_log_panel, vim.tbl_extend('force', opts, { desc = 'Toggle log panel' }))
       vim.keymap.set('n', '<leader>cL', M.clear_log, vim.tbl_extend('force', opts, { desc = 'Clear log' }))
       vim.keymap.set('n', '<leader>cs', M.stop, vim.tbl_extend('force', opts, { desc = 'Stop process' }))
